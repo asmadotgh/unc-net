@@ -7,3 +7,5 @@ matplotlib
 Pillow
 requests
 psutil
+numpy
+pandas
