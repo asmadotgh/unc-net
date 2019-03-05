@@ -7,11 +7,22 @@ import pandas as pd
 from PIL import Image
 import argparse
 from my_constants import Constants
+import pickle
 
 
 class DataLoader:
-    def __init__(self, file_path, in_image_size=48, out_image_size=160):
+    def __init__(self, file_path, in_image_size=48, out_image_size=160, import_embedding=True):
         self.root_dir = file_path[:file_path.rfind('/') + 1]
+        self.import_embedding = import_embedding
+        if self.import_embedding:
+            import pdb; pdb.set_trace()
+            embedding_file = os.path.join(os.path.join(self.root_dir, 'embedding'), 'embeddings.pkl')
+            self.embedding = pickle.load(embedding_file, 'rb')
+            self.embedding_size = len(self.embedding[0])
+            import pdb; pdb.set_trace()
+        else:
+            self.embedding = None
+            self.embedding_size = None
         self.dataset = pd.read_csv(file_path)
         self.train = self.dataset[self.dataset['dataset'] == 'Training']
         self.valid = self.dataset[self.dataset['dataset'] == 'PrivateTest']
@@ -121,7 +132,13 @@ class DataLoader:
             n_annotations = sum(inp_labels)
             probs_labels = [float(i) for i in inp_labels] / n_annotations
             labels[out_idx, :] = probs_labels
-        return images, labels
+
+        # Getting previously processed embeddings
+        if self.import_embedding:
+            embeddings = self.embeddings[indices]
+        else:
+            embeddings = None
+        return images, labels, embeddings
 
     def load_model(self, model, input_map=None):
         # Check if the model is a model directory (containing a metagraph and a checkpoint file)
@@ -145,15 +162,15 @@ class DataLoader:
 
     def get_train_batch(self, batch_size):
         indices = np.random.choice(self.train.index, size=batch_size)
-        images, labels = self.load_data[indices]
-        return images, labels
+        images, labels, embeddings = self.load_data(indices)
+        return images, labels, embeddings
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str,
+    parser.add_argument('--file_path', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
                         help='Path to the data directory containing faces/labels.')
     args = parser.parse_args()
-    data_loader = DataLoader(args.data_dir, in_image_size=48, out_image_size=160)
+    data_loader = DataLoader(args.file_path, in_image_size=48, out_image_size=160, import_embedding=False)
     data_loader.load_data(False, False, save_images=True)

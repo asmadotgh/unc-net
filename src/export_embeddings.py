@@ -20,7 +20,7 @@ def main(args):
 
             np.random.seed(seed=args.seed)
 
-            data_loader = DataLoader(args.data_dir)
+            data_loader = DataLoader(args.data_dir, import_embedding=False)
 
             print('Number of images: %d' % len(data_loader.dataset))
 
@@ -42,7 +42,7 @@ def main(args):
             for i in range(nrof_batches_per_epoch):
                 start_index = i * args.batch_size
                 end_index = min((i + 1) * args.batch_size, nrof_images)
-                images, _ = data_loader.load_data(False, False, indices=np.arange(start_index, end_index))
+                images, _, _ = data_loader.load_data(False, False, indices=np.arange(start_index, end_index))
                 feed_dict = {images_placeholder: images, phase_train_placeholder: False}
                 emb_array[start_index:end_index, :] = sess.run(embeddings, feed_dict=feed_dict)
                 print(f'\033[1A\033[KBatch {i} done!')
