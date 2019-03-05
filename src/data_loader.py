@@ -5,10 +5,12 @@ from tensorflow.python.platform import gfile
 import re
 import pandas as pd
 from PIL import Image
+import argparse
+import sys
 
 
 class DataLoader:
-    def __init__(self, file_path, in_image_size=48, out_image_size=160, save_images=True):
+    def __init__(self, file_path, in_image_size=48, out_image_size=160, save_images=False):
         self.save_images = save_images
         self.root_dir = file_path[:file_path.rfind('/') + 1]
         self.dataset = pd.read_csv(file_path)
@@ -124,3 +126,13 @@ class DataLoader:
 
             saver = tf.train.import_meta_graph(os.path.join(model_exp, meta_file), input_map=input_map)
             saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_dir', type=str,
+                        default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
+                        help='Path to the data directory containing faces/labels.')
+    args = parser.parse_args()
+    data_loader = DataLoader(args.data_dir, in_image_size=48, out_image_size=160, save_images=True)
+    data_loader.load_data(False, False)
