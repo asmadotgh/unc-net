@@ -97,7 +97,7 @@ class DataLoader:
             end_idx = self.nrof_samples
         nrof_samples = end_idx - start_idx
         images = np.zeros((nrof_samples, self.out_image_size, self.out_image_size, 3))
-        for sample_idx in range(start_idx, end_idx):
+        for sample_idx in range(nrof_samples):
             img_name = self.dataset.iloc[sample_idx]['img_name']
             inp_dataset = self.dataset.iloc[sample_idx]['dataset']
             img_arr = np.array([int(i) for i in self.dataset.iloc[sample_idx]['pixels'].split(' ')])
