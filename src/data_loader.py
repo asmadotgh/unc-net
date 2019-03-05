@@ -4,15 +4,19 @@ import tensorflow as tf
 from tensorflow.python.platform import gfile
 import re
 import pandas as pd
+from PIL import Image
 
 
 class DataLoader:
-    def __init__(self, data_dir, image_size=48):
-        self.dataset = pd.read_csv(data_dir)
+    def __init__(self, file_path, in_image_size=48, out_image_size=160, save_images=True):
+        self.save_images = save_images
+        self.root_dir = file_path[:file_path.rfind('/') + 1]
+        self.dataset = pd.read_csv(file_path)
         self.train = self.dataset[self.dataset['dataset'] == 'Training'].reset_index(drop=True)
         self.valid = self.dataset[self.dataset['dataset'] == 'PrivateTest'].reset_index(drop=True)
         self.test = self.dataset[self.dataset['dataset'] == 'PublicTest'].reset_index(drop=True)
-        self.image_size = image_size
+        self.in_image_size = in_image_size
+        self.out_image_size = out_image_size
         self.nrof_samples = len(self.dataset)
         return
 
@@ -67,16 +71,38 @@ class DataLoader:
                     ckpt_file = step_str.groups()[0]
         return meta_file, ckpt_file
 
+    def _save_image(self, inp_dataset, img_name, img):
+        dataset = None
+        if inp_dataset == 'Training':
+            dataset = 'train'
+        elif inp_dataset == 'PrivateTest':
+            dataset = 'valid'
+        elif inp_dataset == 'PublicTest':
+            dataset = 'test'
+        if not dataset:
+            print('Wrong dataset. Only options are train/valid/test')
+            return
+        dataset_dir = self.root_dir + '/images/' + dataset
+        if not os.path.exists(dataset_dir):
+            os.makedirs(dataset_dir)
+        img.save(dataset_dir + '/' + img_name)
+
     def load_data(self, do_random_crop, do_random_flip):
-        images = np.zeros((self.nrof_samples, self.image_size, self.image_size, 3))
+        images = np.zeros((self.nrof_samples, self.out_image_size, self.out_image_size, 3))
         for sample_idx in range(self.nrof_samples):
-            img = np.array([int(i) for i in self.dataset.iloc[sample_idx]['pixels'].split(' ')])
-            img = np.reshape(img, (self.image_size, self.image_size))
-            if img.ndim == 2:
-                img = self._to_rgb(img)
-            img = self._crop(img, do_random_crop, self.image_size)
-            img = self._flip(img, do_random_flip)
-            images[sample_idx, :, :, :] = img
+            img_name = self.dataset.iloc[sample_idx]['img_name']
+            inp_dataset = self.dataset.iloc[sample_idx]['dataset']
+            img_arr = np.array([int(i) for i in self.dataset.iloc[sample_idx]['pixels'].split(' ')])
+            img_arr = np.reshape(img_arr, (self.in_image_size, self.in_image_size))
+            if img_arr.ndim == 2:
+                img_arr = self._to_rgb(img_arr)
+            img_arr = self._crop(img_arr, do_random_crop, self.in_image_size)
+            img_arr = self._flip(img_arr, do_random_flip)
+            img = Image.fromarray(img_arr, 'RGB')
+            resized_img = img.resize((self.out_image_size, self.out_image_size))
+            if self.save_images:
+                self._save_image(inp_dataset, img_name, resized_img)
+            images[sample_idx, :, :, :] = resized_img
         return images
 
     def load_model(self, model, input_map=None):
