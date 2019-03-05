@@ -143,8 +143,7 @@ class EmotionClassifier:
 
             # Apply a softmax function to get probabilities, train this dist against targets with
             # cross entropy loss.
-            flat_labels = tf.reshape(self.tf_y, [-1])
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=flat_labels))
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.tf_y))
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
