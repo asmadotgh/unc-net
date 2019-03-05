@@ -37,6 +37,10 @@ class DataLoader:
         return self.out_image_size
 
     @staticmethod
+    def get_num_classes():
+        return Constants.get_emotion_cols()
+
+    @staticmethod
     def _to_rgb(img):
         w, h = img.shape
         ret = np.empty((w, h, 3), dtype=np.uint8)
@@ -158,8 +162,24 @@ class DataLoader:
             saver = tf.train.import_meta_graph(os.path.join(model_exp, meta_file), input_map=input_map)
             saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
 
-    def get_train_batch(self, batch_size):
+    def get_train_batch(self, batch_size=None):
+        if batch_size is None:
+            batch_size = len(self.train)
         indices = np.random.choice(self.train.index, size=batch_size)
+        images, labels, embeddings = self.load_data(indices)
+        return images, labels, embeddings
+
+    def get_valid_batch(self, batch_size=None):
+        if batch_size is None:
+            batch_size = len(self.valid)
+        indices = np.random.choice(self.valid.index, size=batch_size)
+        images, labels, embeddings = self.load_data(indices)
+        return images, labels, embeddings
+
+    def get_test_batch(self, batch_size=None):
+        if batch_size is None:
+            batch_size = len(self.test)
+        indices = np.random.choice(self.test.index, size=batch_size)
         images, labels, embeddings = self.load_data(indices)
         return images, labels, embeddings
 
