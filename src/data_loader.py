@@ -16,8 +16,8 @@ class DataLoader:
         self.import_embedding = import_embedding
         if self.import_embedding:
             embedding_file = os.path.join(os.path.join(self.root_dir, 'embedding'), 'embeddings.pkl')
-            self.embedding = pickle.load(open(embedding_file, 'rb'))
-            self.embedding_size = np.shape(self.embedding)[1]
+            self.embeddings = pickle.load(open(embedding_file, 'rb'))
+            self.embedding_size = np.shape(self.embeddings)[1]
         else:
             self.embedding = None
             self.embedding_size = None
@@ -32,6 +32,9 @@ class DataLoader:
 
     def get_nrofsampels(self):
         return self.nrof_samples
+
+    def get_embedding_size(self):
+        return self.embedding_size
 
     def get_image_size(self):
         return self.out_image_size

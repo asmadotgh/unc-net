@@ -20,7 +20,7 @@ from data_loader import DataLoader
 class EmotionClassifier:
     def __init__(self, filename, model_name, layer_sizes=[128, 64], batch_size=10,
                  learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
-                 clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/models/'):
+                 clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/'):
         '''Initialize the class by loading the required datasets
         and building the graph.
         Args:
@@ -63,8 +63,8 @@ class EmotionClassifier:
         self.output_every_nth = 10
 
         # Extract the data from the filename
-        self.data_loader = DataLoader(filename)
-        self.input_size = self.data_loader.get_nrofsampels()
+        self.data_loader = DataLoader(filename, import_embedding=True)
+        self.input_size = self.data_loader.get_embedding_size()
         self.output_size = self.data_loader.get_num_classes()
         self.metric_name = 'accuracy'
 
@@ -112,8 +112,6 @@ class EmotionClassifier:
         that will be trained."""
         print('Building computation graph...')
 
-        # TODO [p0] make sure the loss is being calculated correctly. Probs are given rather than classes
-
         with self.graph.as_default():
             self.tf_x = tf.placeholder(tf.float32, name="x")  # features
             self.tf_y = tf.placeholder(tf.float32, name="y")  # labels
@@ -146,8 +144,7 @@ class EmotionClassifier:
             # Apply a softmax function to get probabilities, train this dist against targets with
             # cross entropy loss.
             flat_labels = tf.reshape(self.tf_y, [-1])
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits,
-                                                                                      labels=flat_labels))
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=flat_labels))
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -285,7 +282,8 @@ def bias_variable(shape, name):
     return tf.Variable(initial, name=name)
 
 def main(args):
-    emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.models_base_dir)
+    emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
+                                           checkpoint_dir=args.logs_base_dir)
     emotion_classifier.train(num_steps=1000, output_every_nth=100)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
@@ -300,12 +298,13 @@ def parse_arguments(argv):
     parser.add_argument('--file_path', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
                         help='Path to the data file containing aligned faces/labels.')
-    parser.add_argument('--models_base_dir', type=str,
-                        help='Directory where to write trained models and checkpoints.',
-                        default='/mas/u/asma_gh/uncnet/models/')
-
+    parser.add_argument('--model_name', type=str,
+                        help='Model name.',
+                        default='FC')
     parser.add_argument('--logs_base_dir', type=str,
-                        help='Directory where to write event logs.', default='/mas/u/asma_gh/uncnet/logs/')
+                        default='/mas/u/asma_gh/uncnet/logs/',
+                        help='Directory where to write event logs.')
+
     parser.add_argument('--gpu_memory_fraction', type=float,
                         help='Upper bound on the amount of GPU memory that will be used by the process.', default=1.0)
     parser.add_argument('--pretrained_model', type=str,
