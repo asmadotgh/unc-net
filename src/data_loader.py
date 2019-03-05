@@ -10,8 +10,7 @@ import sys
 
 
 class DataLoader:
-    def __init__(self, file_path, in_image_size=48, out_image_size=160, save_images=False):
-        self.save_images = save_images
+    def __init__(self, file_path, in_image_size=48, out_image_size=160):
         self.root_dir = file_path[:file_path.rfind('/') + 1]
         self.dataset = pd.read_csv(file_path)
         self.train = self.dataset[self.dataset['dataset'] == 'Training'].reset_index(drop=True)
@@ -89,9 +88,13 @@ class DataLoader:
             os.makedirs(dataset_dir)
         img.save(dataset_dir + '/' + img_name)
 
-    def load_data(self, do_random_crop, do_random_flip):
-        images = np.zeros((self.nrof_samples, self.out_image_size, self.out_image_size, 3))
-        for sample_idx in range(self.nrof_samples):
+    def load_data(self, do_random_crop, do_random_flip, start_idx=None, end_idx=None, save_images=False):
+        if not start_idx or not end_idx:
+            start_idx = 0
+            end_idx = self.nrof_samples
+        nrof_samples = end_idx - start_idx + 1
+        images = np.zeros((nrof_samples, self.out_image_size, self.out_image_size, 3))
+        for sample_idx in range(start_idx, end_idx):
             img_name = self.dataset.iloc[sample_idx]['img_name']
             inp_dataset = self.dataset.iloc[sample_idx]['dataset']
             img_arr = np.array([int(i) for i in self.dataset.iloc[sample_idx]['pixels'].split(' ')])
@@ -102,7 +105,7 @@ class DataLoader:
             img_arr = self._flip(img_arr, do_random_flip)
             img = Image.fromarray(img_arr, 'RGB')
             resized_img = img.resize((self.out_image_size, self.out_image_size))
-            if self.save_images:
+            if save_images:
                 self._save_image(inp_dataset, img_name, resized_img)
             images[sample_idx, :, :, :] = resized_img
         return images
@@ -134,5 +137,5 @@ if __name__ == '__main__':
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
                         help='Path to the data directory containing faces/labels.')
     args = parser.parse_args()
-    data_loader = DataLoader(args.data_dir, in_image_size=48, out_image_size=160, save_images=True)
-    data_loader.load_data(False, False)
+    data_loader = DataLoader(args.data_dir, in_image_size=48, out_image_size=160)
+    data_loader.load_data(False, False, save_images=True)
