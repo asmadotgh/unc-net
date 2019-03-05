@@ -13,9 +13,9 @@ class DataLoader:
     def __init__(self, file_path, in_image_size=48, out_image_size=160):
         self.root_dir = file_path[:file_path.rfind('/') + 1]
         self.dataset = pd.read_csv(file_path)
-        self.train = self.dataset[self.dataset['dataset'] == 'Training'].reset_index(drop=True)
-        self.valid = self.dataset[self.dataset['dataset'] == 'PrivateTest'].reset_index(drop=True)
-        self.test = self.dataset[self.dataset['dataset'] == 'PublicTest'].reset_index(drop=True)
+        self.train = self.dataset[self.dataset['dataset'] == 'Training']
+        self.valid = self.dataset[self.dataset['dataset'] == 'PrivateTest']
+        self.test = self.dataset[self.dataset['dataset'] == 'PublicTest']
         self.in_image_size = in_image_size
         self.out_image_size = out_image_size
         self.nrof_samples = len(self.dataset)
@@ -119,15 +119,15 @@ class DataLoader:
             # Getting labels
             inp_labels = self.dataset.iloc[sample_idx][Constants.get_emotion_cols()]
             n_annotations = sum(inp_labels)
-            probs_labels = list(inp_labels) * 1.0 / n_annotations
-            labels[out_idx, :, :, :] = probs_labels
+            probs_labels = [float(i) for i in inp_labels] / n_annotations
+            labels[out_idx, :] = probs_labels
         return images, labels
 
     def load_model(self, model, input_map=None):
         # Check if the model is a model directory (containing a metagraph and a checkpoint file)
         #  or if it is a protobuf file with a frozen graph
         model_exp = os.path.expanduser(model)
-        if (os.path.isfile(model_exp)):
+        if os.path.isfile(model_exp):
             print('Model filename: %s' % model_exp)
             with gfile.FastGFile(model_exp, 'rb') as f:
                 graph_def = tf.GraphDef()
@@ -144,7 +144,7 @@ class DataLoader:
             saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
 
     def get_train_batch(self, batch_size):
-        indices = np.random.choice(len(self.train), size=batch_size)
+        indices = np.random.choice(self.train.index, size=batch_size)
         images, labels = self.load_data[indices]
         return images, labels
 
