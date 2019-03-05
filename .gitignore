@@ -1,7 +1,7 @@
 datasets
 pretrained_models
 logs
-models
+./models
 
 led / optimized / DLL files
 __pycache__/
