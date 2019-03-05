@@ -42,7 +42,7 @@ def main(args):
             for i in range(nrof_batches_per_epoch):
                 start_index = i * args.batch_size
                 end_index = min((i + 1) * args.batch_size, nrof_images)
-                images = data_loader.load_data(False, False, start_idx=start_index, end_idx=end_index)
+                images, _ = data_loader.load_data(False, False, start_idx=start_index, end_idx=end_index)
                 feed_dict = {images_placeholder: images, phase_train_placeholder: False}
                 emb_array[start_index:end_index, :] = sess.run(embeddings, feed_dict=feed_dict)
                 print(f'\033[1A\033[KBatch {i} done!')
