@@ -4,14 +4,11 @@ import scipy
 from scipy import stats
 import argparse
 import sys
+from my_constants import Constants
 
 
 class FERPlus:
     def __init__(self, df, output_dir):
-        self.label_cols = ['neutral', 'happiness', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'contempt',
-                           'unknown', 'NF']
-        self.emotion_cols = ['neutral', 'happiness', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'contempt',
-                             'unknown']
         self.df = self._preprocess(df)
         self.train = df[df['dataset'] == 'Training'].reset_index(drop=True)
         self.valid = df[df['dataset'] == 'PrivateTest'].reset_index(drop=True)
@@ -19,13 +16,13 @@ class FERPlus:
         self.output_dir = output_dir
 
     def _calc_metrics(self, series):
-        n_annotations = sum(series[self.emotion_cols])
-        if n_annotations==0:
+        n_annotations = sum(series[Constants.get_emotion_cols()])
+        if n_annotations == 0:
             series['entropy'] = np.nan
             series['disagreement_p'] = np.nan
             return series
         # count -> probabilities.
-        probs = list(series[self.emotion_cols]*1.0/n_annotations)
+        probs = list(series[Constants.get_emotion_cols()]*1.0/n_annotations)
         series['entropy'] = scipy.stats.entropy(probs)
         series['disagreement_p'] = 1.0 - sum([p*p for p in probs])  # 1 - \sum p^2
         return series
