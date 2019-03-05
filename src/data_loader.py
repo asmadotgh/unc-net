@@ -15,11 +15,9 @@ class DataLoader:
         self.root_dir = file_path[:file_path.rfind('/') + 1]
         self.import_embedding = import_embedding
         if self.import_embedding:
-            import pdb; pdb.set_trace()
             embedding_file = os.path.join(os.path.join(self.root_dir, 'embedding'), 'embeddings.pkl')
-            self.embedding = pickle.load(embedding_file, 'rb')
-            self.embedding_size = len(self.embedding[0])
-            import pdb; pdb.set_trace()
+            self.embedding = pickle.load(open(embedding_file, 'rb'))
+            self.embedding_size = np.shape(self.embedding)[1]
         else:
             self.embedding = None
             self.embedding_size = None
@@ -170,7 +168,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--file_path', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
-                        help='Path to the data directory containing faces/labels.')
+                        help='Path to the file containing faces/labels.')
     args = parser.parse_args()
     data_loader = DataLoader(args.file_path, in_image_size=48, out_image_size=160, import_embedding=False)
     data_loader.load_data(False, False, save_images=True)
