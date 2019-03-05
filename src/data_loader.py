@@ -110,7 +110,7 @@ class DataLoader:
             os.makedirs(dataset_dir)
         img.save(os.path.join(dataset_dir, img_name))
 
-    def load_data(self, do_random_crop=False, do_random_flip=False, indices=None, save_images=False):
+    def load_data(self, indices=None, do_random_crop=False, do_random_flip=False, save_images=False):
         if indices is None:
             indices = range(self.nrof_samples)
         nrof_samples = len(indices)
@@ -169,21 +169,21 @@ class DataLoader:
         if batch_size is None:
             batch_size = len(self.train)
         indices = np.random.choice(self.train.index, size=batch_size)
-        images, labels, embeddings = self.load_data(indices)
+        images, labels, embeddings = self.load_data(indices=indices)
         return images, labels, embeddings
 
     def get_valid_batch(self, batch_size=None):
         if batch_size is None:
             batch_size = len(self.valid)
         indices = np.random.choice(self.valid.index, size=batch_size)
-        images, labels, embeddings = self.load_data(indices)
+        images, labels, embeddings = self.load_data(indices=indices)
         return images, labels, embeddings
 
     def get_test_batch(self, batch_size=None):
         if batch_size is None:
             batch_size = len(self.test)
         indices = np.random.choice(self.test.index, size=batch_size)
-        images, labels, embeddings = self.load_data(indices)
+        images, labels, embeddings = self.load_data(indices=indices)
         return images, labels, embeddings
 
 
@@ -194,4 +194,4 @@ if __name__ == '__main__':
                         help='Path to the file containing faces/labels.')
     args = parser.parse_args()
     data_loader = DataLoader(args.file_path, in_image_size=48, out_image_size=160, import_embedding=False)
-    data_loader.load_data(False, False, save_images=True)
+    data_loader.load_data(save_images=True)

@@ -56,11 +56,7 @@ class EmotionClassifier:
         self.activation_func = 'relu'
         self.optimizer = tf.train.AdamOptimizer
 
-        # Logistics
-        self.checkpoint_dir = checkpoint_dir
-        self.filename = filename
-        self.model_name = model_name
-        self.output_every_nth = 10
+
 
         # Extract the data from the filename
         self.data_loader = DataLoader(filename, import_embedding=True)
@@ -76,9 +72,12 @@ class EmotionClassifier:
         self.session = tf.Session(graph=self.graph)
         self.session.run(self.init)
 
-        # Use for plotting evaluation.
-        self.train_metrics = []
-        self.val_metrics = []
+        # Logistics
+        self.checkpoint_dir = checkpoint_dir
+        self.filename = filename
+        self.model_name = model_name
+        self.output_every_nth = 10
+        self.summary_writer = tf.summary.FileWriter(self.checkpoint_dir, self.graph)
 
     def initialize_network_weights(self):
         """Constructs Tensorflow variables for the weights and biases
@@ -176,6 +175,8 @@ class EmotionClassifier:
         descent rather than SGD. SGD is preferred since it has a
         strong regularizing effect.
         """
+        summary = tf.Summary()
+
         if output_every_nth is not None:
             self.output_every_nth = output_every_nth
 
@@ -202,15 +203,21 @@ class EmotionClassifier:
                                      self.tf_y: valid_labels,
                                      self.tf_dropout_prob: 1.0}  # TODO [p1] add dropout for epistemic bayesian
 
-                    train_score, loss = self.session.run([self.accuracy, self.loss], feed_dict)
-                    val_score, loss = self.session.run([self.accuracy, self.loss], val_feed_dict)
+                    train_score, train_loss = self.session.run([self.accuracy, self.loss], feed_dict)
+                    valid_score, valid_loss = self.session.run([self.accuracy, self.loss], val_feed_dict)
+
+
+                    tf.summary.scalar('train/accuracy', train_score)
+                    tf.summary.scalar('train/loss', train_loss)
+
+                    tf.summary.scalar('validation/accuracy', valid_score)
+                    tf.summary.scalar('validation/loss', valid_loss)
+
+                    self.summary_writer.add_summary(summary, global_step=step)
 
                     print(f"Training iteration {step}")
-                    print(f"\tTraining {self.metric_name} {train_score}")
-                    print(f"\t Validation {self.metric_name} {val_score}")
-                    print(f"\t Loss {loss}")
-                    self.train_metrics.append(train_score)
-                    self.val_metrics.append(val_score)
+                    print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
+                    print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
 
                     # Save a checkpoint of the model
                     self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
@@ -279,6 +286,7 @@ def bias_variable(shape, name):
     """Initializes a tensorflow bias variable to a small constant value."""
     initial = tf.constant(0.1, shape=shape, dtype=tf.float32)
     return tf.Variable(initial, name=name)
+
 
 def main(args):
     emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
