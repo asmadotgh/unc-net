@@ -21,6 +21,9 @@ class DataLoader:
         self.nrof_samples = len(self.dataset)
         return
 
+    def get_nrofsampels(self):
+        return self.nrof_samples
+
     @staticmethod
     def _to_rgb(img):
         w, h = img.shape
@@ -89,10 +92,10 @@ class DataLoader:
         img.save(dataset_dir + '/' + img_name)
 
     def load_data(self, do_random_crop, do_random_flip, start_idx=None, end_idx=None, save_images=False):
-        if not start_idx or not end_idx:
+        if start_idx is None or end_idx is None:
             start_idx = 0
             end_idx = self.nrof_samples
-        nrof_samples = end_idx - start_idx + 1
+        nrof_samples = end_idx - start_idx
         images = np.zeros((nrof_samples, self.out_image_size, self.out_image_size, 3))
         for sample_idx in range(start_idx, end_idx):
             img_name = self.dataset.iloc[sample_idx]['img_name']
