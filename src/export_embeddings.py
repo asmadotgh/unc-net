@@ -1,27 +1,3 @@
-"""An example of how to use your own dataset to train a classifier that recognizes people.
-"""
-# MIT License
-#
-# Copyright (c) 2016 David Sandberg
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -69,7 +45,7 @@ def main(args):
                 images = data_loader.load_data(False, False, start_idx=start_index, end_idx=end_index)
                 feed_dict = {images_placeholder: images, phase_train_placeholder: False}
                 emb_array[start_index:end_index, :] = sess.run(embeddings, feed_dict=feed_dict)
-                print(f'\033[1A\033[K Batch {i} done!')
+                print(f'\033[1A\033[KBatch {i} done!')
 
             print(f'embedding shape: {np.shape(emb_array)}')
             if not os.path.exists(args.embedding_dir):

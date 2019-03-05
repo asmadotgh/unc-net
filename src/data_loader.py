@@ -6,7 +6,6 @@ import re
 import pandas as pd
 from PIL import Image
 import argparse
-import sys
 
 
 class DataLoader:
