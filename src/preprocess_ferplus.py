@@ -42,6 +42,7 @@ class FERPlus:
         self._save_df(self.train, self.output_dir+'/train.csv')
         self._save_df(self.valid, self.output_dir + '/valid.csv')
         self._save_df(self.test, self.output_dir + '/test.csv')
+        self._save_df(self.df, self.output_dir + '/all.csv')
         return
 
 
