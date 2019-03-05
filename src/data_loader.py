@@ -85,10 +85,10 @@ class DataLoader:
         if not dataset:
             print('Wrong dataset. Only options are train/valid/test')
             return
-        dataset_dir = self.root_dir + '/images/' + dataset
+        dataset_dir = os.path.join(os.path.join(self.root_dir, 'images'), dataset)
         if not os.path.exists(dataset_dir):
             os.makedirs(dataset_dir)
-        img.save(dataset_dir + '/' + img_name)
+        img.save(os.path.join(dataset_dir, img_name))
 
     def load_data(self, do_random_crop, do_random_flip, start_idx=None, end_idx=None, save_images=False):
         if start_idx is None or end_idx is None:

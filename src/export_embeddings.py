@@ -50,7 +50,7 @@ def main(args):
             print(f'embedding shape: {np.shape(emb_array)}')
             if not os.path.exists(args.embedding_dir):
                 os.makedirs(args.embedding_dir)
-            pickle.dump(emb_array, open(args.embedding_dir+'/embeddings.pkl', 'wb'))
+            pickle.dump(emb_array, open(os.path.join(args.embedding_dir, 'embeddings.pkl'), 'wb'))
 
 
 def parse_arguments(argv):
