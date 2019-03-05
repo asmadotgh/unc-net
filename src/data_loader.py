@@ -38,7 +38,7 @@ class DataLoader:
 
     @staticmethod
     def get_num_classes():
-        return Constants.get_emotion_cols()
+        return len(Constants.get_emotion_cols())
 
     @staticmethod
     def _to_rgb(img):
@@ -107,7 +107,7 @@ class DataLoader:
             os.makedirs(dataset_dir)
         img.save(os.path.join(dataset_dir, img_name))
 
-    def load_data(self, do_random_crop, do_random_flip, indices=None, save_images=False):
+    def load_data(self, do_random_crop=False, do_random_flip=False, indices=None, save_images=False):
         if indices is None:
             indices = range(self.nrof_samples)
         nrof_samples = len(indices)
