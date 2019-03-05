@@ -1,0 +1,78 @@
+import pandas as pd
+import numpy as np
+import scipy
+from scipy import stats
+import argparse
+import sys
+
+
+class FERPlus:
+    def __init__(self, df, output_dir):
+        self.label_cols = ['neutral', 'happiness', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'contempt',
+                           'unknown', 'NF']
+        self.emotion_cols = ['neutral', 'happiness', 'surprise', 'sadness', 'anger', 'disgust', 'fear', 'contempt',
+                             'unknown']
+        self.df = self._preprocess(df)
+        self.train = df[df['dataset'] == 'Training'].reset_index(drop=True)
+        self.valid = df[df['dataset'] == 'PrivateTest'].reset_index(drop=True)
+        self.test = df[df['dataset'] == 'PublicTest'].reset_index(drop=True)
+        self.output_dir = output_dir
+
+    def _calc_metrics(self, series):
+        n_annotations = sum(series[self.emotion_cols])
+        if n_annotations==0:
+            series['entropy'] = np.nan
+            series['disagreement_p'] = np.nan
+            return series
+        # count -> probabilities.
+        probs = list(series[self.emotion_cols]*1.0/n_annotations)
+        series['entropy'] = scipy.stats.entropy(probs)
+        series['disagreement_p'] = 1.0 - sum([p*p for p in probs])  # 1 - \sum p^2
+        return series
+
+    def _preprocess(self, df):
+        df = df.apply(self._calc_metrics, axis=1)
+        df = df.dropna(subset=['img_name', 'entropy', 'disagreement_p'])
+        return df
+
+    def _save_df(self, df, output_dir):
+        df.to_csv(output_dir, index=False)
+
+    def export_data(self):
+        self._save_df(self.train, self.output_dir+'/train.csv')
+        self._save_df(self.valid, self.output_dir + '/valid.csv')
+        self._save_df(self.test, self.output_dir + '/test.csv')
+        return
+
+
+def main(args):
+    fer = pd.read_csv(args.fer_dir)
+    fer_plus = pd.read_csv(args.fer_plus_dir)
+    all_df = fer.merge(fer_plus, how='inner', on='Usage', left_index=True, right_index=True)
+    all_df = all_df.rename(columns={"Usage": "dataset", "Image name": "img_name"})
+    fer_plus = FERPlus(all_df, args.output_dir)
+    fer_plus.export_data()
+
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--fer_dir', type=str,
+                        default='/mas/u/asma_gh/uncnet/datasets/FER+/FER/fer2013/fer2013.csv',
+                        help='Path to FER data.')
+    parser.add_argument('--fer_plus_dir', type=str,
+                        default='/mas/u/asma_gh/uncnet/datasets/FER+/FERPlus/fer2013new.csv',
+                        help='Path to FER+ data.')
+    parser.add_argument('--output_dir', type=str,
+                        default='/mas/u/asma_gh/uncnet/datasets/FER+',
+                        help='Path to the directory to save train/valid/test subsets.')
+    parser.add_argument('--image_size', type=int,
+                        help='Image size (height, width) in pixels.', default=68)
+    parser.add_argument('--seed', type=int,
+                        help='Random seed.', default=666)
+
+    return parser.parse_args(argv)
+
+
+if __name__ == '__main__':
+    main(parse_arguments(sys.argv[1:]))

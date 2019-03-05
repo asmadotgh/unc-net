@@ -1,5 +1,7 @@
 datasets
 trained_models
+logs
+models
 
 led / optimized / DLL files
 __pycache__/
