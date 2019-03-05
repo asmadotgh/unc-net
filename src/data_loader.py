@@ -6,6 +6,7 @@ import re
 import pandas as pd
 from PIL import Image
 import argparse
+from my_constants import Constants
 
 
 class DataLoader:
@@ -22,6 +23,9 @@ class DataLoader:
 
     def get_nrofsampels(self):
         return self.nrof_samples
+
+    def get_image_size(self):
+        return self.out_image_size
 
     @staticmethod
     def _to_rgb(img):
@@ -90,13 +94,14 @@ class DataLoader:
             os.makedirs(dataset_dir)
         img.save(os.path.join(dataset_dir, img_name))
 
-    def load_data(self, do_random_crop, do_random_flip, start_idx=None, end_idx=None, save_images=False):
-        if start_idx is None or end_idx is None:
-            start_idx = 0
-            end_idx = self.nrof_samples
-        nrof_samples = end_idx - start_idx
+    def load_data(self, do_random_crop, do_random_flip, indices=None, save_images=False):
+        if indices is None:
+            indices = range(self.nrof_samples)
+        nrof_samples = len(indices)
         images = np.zeros((nrof_samples, self.out_image_size, self.out_image_size, 3))
-        for sample_idx in range(nrof_samples):
+        labels = np.zeros((nrof_samples, len(Constants.get_emotion_cols())))
+        for out_idx, sample_idx in enumerate(indices):
+            # Getting images
             img_name = self.dataset.iloc[sample_idx]['img_name']
             inp_dataset = self.dataset.iloc[sample_idx]['dataset']
             img_arr = np.array([int(i) for i in self.dataset.iloc[sample_idx]['pixels'].split(' ')])
@@ -109,8 +114,14 @@ class DataLoader:
             resized_img = img.resize((self.out_image_size, self.out_image_size))
             if save_images:
                 self._save_image(inp_dataset, img_name, resized_img)
-            images[sample_idx, :, :, :] = resized_img
-        return images
+            images[out_idx, :, :, :] = resized_img
+
+            # Getting labels
+            inp_labels = self.dataset.iloc[sample_idx][Constants.get_emotion_cols()]
+            n_annotations = sum(inp_labels)
+            probs_labels = list(inp_labels) * 1.0 / n_annotations
+            labels[out_idx, :, :, :] = probs_labels
+        return images, labels
 
     def load_model(self, model, input_map=None):
         # Check if the model is a model directory (containing a metagraph and a checkpoint file)
@@ -131,6 +142,11 @@ class DataLoader:
 
             saver = tf.train.import_meta_graph(os.path.join(model_exp, meta_file), input_map=input_map)
             saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
+
+    def get_train_batch(self, batch_size):
+        indices = np.random.choice(len(self.train), size=batch_size)
+        images, labels = self.load_data[indices]
+        return images, labels
 
 
 if __name__ == '__main__':
