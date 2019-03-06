@@ -15,10 +15,11 @@ import h5py
 import math
 from tensorflow.python.ops import data_flow_ops
 from data_loader import DataLoader
+from datetime import datetime
 
 
 class EmotionClassifier:
-    def __init__(self, filename, model_name, layer_sizes=[128, 64], batch_size=10,
+    def __init__(self, filename, model_name, layer_sizes=[128, 128], num_epochs=500, batch_size=90,
                  learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
                  clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/'):
         '''Initialize the class by loading the required datasets
@@ -46,6 +47,7 @@ class EmotionClassifier:
         # Hyperparameters that should be tuned
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
+        self.num_epochs = num_epochs
         self.learning_rate = learning_rate
         self.dropout_prob = dropout_prob
         self.weight_penalty = weight_penalty
@@ -77,7 +79,10 @@ class EmotionClassifier:
         self.filename = filename
         self.model_name = model_name
         self.output_every_nth = 10
-        self.summary_writer = tf.summary.FileWriter(self.checkpoint_dir, self.graph)
+
+        # Tensorboard
+        self.train_summary_writer = tf.summary.FileWriter(os.path.join(self.checkpoint_dir, 'train'), self.graph)
+        self.valid_summary_writer = tf.summary.FileWriter(os.path.join(self.checkpoint_dir, 'validation'))
 
     def initialize_network_weights(self):
         """Constructs Tensorflow variables for the weights and biases
@@ -163,9 +168,14 @@ class EmotionClassifier:
             self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.params),
                                                               self.global_step)
 
+            tf.summary.scalar('accuracy', self.accuracy)
+            tf.summary.scalar('loss', self.loss)
+            tf.summary.histogram('logits', self.logits)
+            self.summaries = tf.summary.merge_all()
+
             self.init = tf.global_variables_initializer()
 
-    def train(self, num_steps=30000, output_every_nth=None):
+    def train(self, output_every_nth=None):
         """Trains using stochastic gradient descent (SGD).
 
         Runs batches of training data through the model for a given
@@ -175,7 +185,6 @@ class EmotionClassifier:
         descent rather than SGD. SGD is preferred since it has a
         strong regularizing effect.
         """
-        summary = tf.Summary()
 
         if output_every_nth is not None:
             self.output_every_nth = output_every_nth
@@ -184,7 +193,7 @@ class EmotionClassifier:
             # Used to save model checkpoints.
             self.saver = tf.train.Saver()
 
-            for step in range(num_steps):
+            for step in range(self.num_epochs):
                 # Grab a batch of data to feed into the placeholders in the graph.
                 _, labels, embeddings = self.data_loader.get_train_batch(self.batch_size)
                 feed_dict = {self.tf_x: embeddings,
@@ -203,17 +212,11 @@ class EmotionClassifier:
                                      self.tf_y: valid_labels,
                                      self.tf_dropout_prob: 1.0}  # TODO [p1] add dropout for epistemic bayesian
 
-                    train_score, train_loss = self.session.run([self.accuracy, self.loss], feed_dict)
-                    valid_score, valid_loss = self.session.run([self.accuracy, self.loss], val_feed_dict)
+                    train_summaries, train_score, train_loss = self.session.run([self.summaries, self.accuracy, self.loss], feed_dict)
+                    valid_summaries,valid_score, valid_loss = self.session.run([self.summaries, self.accuracy, self.loss], val_feed_dict)
 
-
-                    tf.summary.scalar('train/accuracy', train_score)
-                    tf.summary.scalar('train/loss', train_loss)
-
-                    tf.summary.scalar('validation/accuracy', valid_score)
-                    tf.summary.scalar('validation/loss', valid_loss)
-
-                    self.summary_writer.add_summary(summary, global_step=step)
+                    self.train_summary_writer.add_summary(train_summaries, global_step=step)
+                    self.valid_summary_writer.add_summary(valid_summaries, global_step=step)
 
                     print(f"Training iteration {step}")
                     print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
@@ -290,12 +293,14 @@ def bias_variable(shape, name):
 
 def main(args):
     emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
-                                           checkpoint_dir=args.logs_base_dir)
-    emotion_classifier.train(num_steps=1000, output_every_nth=100)
+                                           checkpoint_dir=args.logs_base_dir+str(datetime.now().timestamp()), batch_size=args.batch_size,
+                                           num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
+                                           dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
+                                           weight_penalty=args.weight_decay)
+    emotion_classifier.train(output_every_nth=100)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
 
-    # TODO [p0] tensorboard metrics
     # TODO [p1] change to tf.slim or sth for more compact presentation?
 
 
@@ -311,25 +316,28 @@ def parse_arguments(argv):
     parser.add_argument('--logs_base_dir', type=str,
                         default='/mas/u/asma_gh/uncnet/logs/',
                         help='Directory where to write event logs.')
-
-    parser.add_argument('--gpu_memory_fraction', type=float,
-                        help='Upper bound on the amount of GPU memory that will be used by the process.', default=1.0)
-    parser.add_argument('--pretrained_model', type=str,
-                        help='Load a pretrained model before training starts.')
-    parser.add_argument('--model_def', type=str,
-                        help='Model definition. Points to a module containing the definition of the inference graph.',
-                        default='models.fc')
     parser.add_argument('--max_nrof_epochs', type=int,
                         help='Number of epochs to run.', default=500)
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)
+    parser.add_argument('--hidden_layer_size', type=list,
+                        help='Dimensionality of the embedding.', default=[128, 128])
+    parser.add_argument('--keep_probability', type=float,
+                        help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
+    parser.add_argument('--learning_rate', type=float,
+                        help='Initial learning rate. If set to a negative value a learning rate ' +
+                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.1)
+    parser.add_argument('--weight_decay', type=float,
+                        help='L2 weight regularization.', default=0.0)
+
+
+    # TODO [p1] need these?
+    parser.add_argument('--pretrained_model', type=str,
+                        help='Load a pretrained model before training starts.')
     parser.add_argument('--image_size', type=int,
                         help='Image size (height, width) in pixels.', default=160)
     parser.add_argument('--epoch_size', type=int,
                         help='Number of batches per epoch.', default=1000)
-    #TODO can you get a list of ints as argument?
-    parser.add_argument('--hidden_layer_size', type=list,
-                        help='Dimensionality of the embedding.', default=[128, 128])
     parser.add_argument('--random_crop',
                         help='Performs random cropping of training images. If false, the center image_size pixels from the training images are used. ' +
                              'If the size of the images in the data directory is equal to image_size no cropping is performed',
@@ -340,10 +348,6 @@ def parse_arguments(argv):
                         help='Performs random rotations of training images.', action='store_true')
     parser.add_argument('--use_fixed_image_standardization',
                         help='Performs fixed standardization of images.', action='store_true')
-    parser.add_argument('--keep_probability', type=float,
-                        help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
-    parser.add_argument('--weight_decay', type=float,
-                        help='L2 weight regularization.', default=0.0)
     parser.add_argument('--center_loss_factor', type=float,
                         help='Center loss factor.', default=0.0)
     parser.add_argument('--center_loss_alfa', type=float,
@@ -356,9 +360,6 @@ def parse_arguments(argv):
                         help='The max value for the prelogits histogram.', default=10.0)
     parser.add_argument('--optimizer', type=str, choices=['ADAGRAD', 'ADADELTA', 'ADAM', 'RMSPROP', 'MOM'],
                         help='The optimization algorithm to use', default='ADAGRAD')
-    parser.add_argument('--learning_rate', type=float,
-                        help='Initial learning rate. If set to a negative value a learning rate ' +
-                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.1)
     parser.add_argument('--learning_rate_decay_epochs', type=int,
                         help='Number of epochs between learning rate decay.', default=100)
     parser.add_argument('--learning_rate_decay_factor', type=float,
