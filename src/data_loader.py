@@ -11,7 +11,9 @@ import pickle
 
 
 class DataLoader:
-    def __init__(self, file_path, in_image_size=48, out_image_size=160, import_embedding=True):
+    def __init__(self, file_path, in_image_size=48, out_image_size=160, import_embedding=True, seed=666):
+        self.seed = seed
+        np.random.seed(self.seed)
         self.root_dir = file_path[:file_path.rfind('/') + 1]
         self.import_embedding = import_embedding
         if self.import_embedding:
@@ -28,9 +30,14 @@ class DataLoader:
         self.in_image_size = in_image_size
         self.out_image_size = out_image_size
         self.nrof_samples = len(self.dataset)
+        self.shuffled_train_indices = self.train.index.to_list()
+        np.random.shuffle(self.shuffled_train_indices)
         return
 
-    def get_nrofsampels(self):
+    def get_nrof_train_sampels(self):
+        return len(self.train)
+
+    def get_nrof_samples(self):
         return self.nrof_samples
 
     def get_embedding_size(self):
@@ -165,11 +172,18 @@ class DataLoader:
             saver = tf.train.import_meta_graph(os.path.join(model_exp, meta_file), input_map=input_map)
             saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
 
-    def get_train_batch(self, batch_size=None):
-        if batch_size is None:
-            batch_size = len(self.train)
-        indices = np.random.choice(self.train.index, size=batch_size)
-        images, labels, embeddings = self.load_data(indices=indices)
+    def get_train_batch(self, batch_size=None, idx=None):
+        if idx is None:
+            if batch_size is None:
+                batch_size = len(self.train)
+            indices = np.random.choice(self.train.index, size=batch_size)
+            images, labels, embeddings = self.load_data(indices=indices)
+        else:
+            if ((idx + 1) * batch_size) > len(self.train):
+                print('batch number exceeds train size.')
+                return None, None, None
+            indices = self.shuffled_train_indices[idx * batch_size:(idx + 1) * batch_size]
+            images, labels, embeddings = self.load_data(indices=indices)
         return images, labels, embeddings
 
     def get_valid_batch(self, batch_size=None):

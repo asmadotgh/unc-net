@@ -22,7 +22,7 @@ from my_constants import Constants
 class EmotionClassifier:
     def __init__(self, filename, model_name, layer_sizes=[128, 128], num_epochs=500, batch_size=90,
                  learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
-                 clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/'):
+                 clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
         and building the graph.
@@ -61,7 +61,8 @@ class EmotionClassifier:
         self.optimizer = tf.train.AdamOptimizer
 
         # Extract the data from the filename
-        self.data_loader = DataLoader(filename, import_embedding=True)
+        self.seed = seed
+        self.data_loader = DataLoader(filename, import_embedding=True, seed=self.seed)
         self.input_size = self.data_loader.get_embedding_size()
         self.output_size = self.data_loader.get_num_classes()
         self.metric_name = 'accuracy'
@@ -122,8 +123,8 @@ class EmotionClassifier:
         print('Building computation graph...')
 
         with self.graph.as_default():
-            self.tf_x = tf.placeholder(tf.float32, shape=(self.batch_size, self.input_size), name="x")  # features
-            self.tf_y = tf.placeholder(tf.float32, shape=(self.batch_size, self.output_size), name="y")  # labels
+            self.tf_x = tf.placeholder(tf.float32, shape=(None, self.input_size), name="x")  # features
+            self.tf_y = tf.placeholder(tf.float32, shape=(None, self.output_size), name="y")  # labels
             self.tf_dropout_prob = tf.placeholder(tf.float32)  # Implements dropout
 
             # TODO [p1] add loading from previous checkpoint
@@ -160,7 +161,6 @@ class EmotionClassifier:
             self.class_probabilities = tf.nn.softmax(self.logits)
             self.predictions = tf.argmax(self.class_probabilities, axis=1)
             self.target = tf.argmax(self.tf_y, axis=1)
-
 
             self.kl = tf.reduce_sum(self._plus_eps(self.tf_y) * tf.log(
                 self._plus_eps(self.tf_y) / self._plus_eps(self.class_probabilities)))
@@ -229,37 +229,42 @@ class EmotionClassifier:
             # Used to save model checkpoints.
             self.saver = tf.train.Saver()
 
-            for step in range(self.num_epochs):
-                # Grab a batch of data to feed into the placeholders in the graph.
-                _, labels, embeddings = self.data_loader.get_train_batch(self.batch_size)
-                feed_dict = {self.tf_x: embeddings,
-                             self.tf_y: labels,
-                             self.tf_dropout_prob: self.dropout_prob}
+            for num_epoch in range(self.num_epochs):
+                for step in range(int(self.data_loader.get_nrof_train_sampels()/self.batch_size)):
+                    # Resetting metrics for each batch?
+                    self.session.run(self.local_init)
+                    # Grab a batch of data to feed into the placeholders in the graph.
+                    _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
+                    feed_dict = {self.tf_x: embeddings,
+                                 self.tf_y: labels,
+                                 self.tf_dropout_prob: self.dropout_prob}
 
-                # Update parameters in the direction of the gradient computed by
-                # the optimizer.
-                _ = self.session.run([self.opt_step], feed_dict)
+                    # Update parameters in the direction of the gradient computed by
+                    # the optimizer.
+                    _ = self.session.run([self.opt_step], feed_dict)
 
-                # Output/save the training and validation performance every few steps.
-                if step % self.output_every_nth == 0:
-                    # Grab a batch of validation data too.
-                    _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch(self.batch_size)
-                    val_feed_dict = {self.tf_x: valid_embeddings,
-                                     self.tf_y: valid_labels,
-                                     self.tf_dropout_prob: 1.0}  # TODO [p1] add dropout for epistemic bayesian
+                    # Output/save the training and validation performance every few steps.
+                    if step % self.output_every_nth == 0:
+                        # Grab a batch of validation data too.
+                        _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch(self.batch_size)
+                        val_feed_dict = {self.tf_x: valid_embeddings,
+                                         self.tf_y: valid_labels,
+                                         self.tf_dropout_prob: 1.0}  # TODO [p1] add dropout for epistemic bayesian
 
-                    train_summaries, train_score, train_loss = self.session.run([self.summaries, self.accuracy, self.loss], feed_dict)
-                    valid_summaries,valid_score, valid_loss = self.session.run([self.summaries, self.accuracy, self.loss], val_feed_dict)
+                        train_summaries, train_score, train_loss = self.session.run(
+                            [self.summaries, self.accuracy, self.loss], feed_dict)
+                        valid_summaries, valid_score, valid_loss = self.session.run(
+                            [self.summaries, self.accuracy, self.loss], val_feed_dict)
 
-                    self.train_summary_writer.add_summary(train_summaries, global_step=step)
-                    self.valid_summary_writer.add_summary(valid_summaries, global_step=step)
+                        self.train_summary_writer.add_summary(train_summaries, global_step=step)
+                        self.valid_summary_writer.add_summary(valid_summaries, global_step=step)
 
-                    print(f"Training iteration {step}")
-                    print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
-                    print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
+                        print(f"Epoch #{num_epoch}, Training iteration {step}")
+                        print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
+                        print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
 
-                    # Save a checkpoint of the model
-                    self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
+                        # Save a checkpoint of the model
+                        self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
 
     def predict(self, x, get_probabilities=False):
         """Gets the network's predictions for some new data X
@@ -332,7 +337,7 @@ def main(args):
                                            checkpoint_dir=args.logs_base_dir+str(datetime.now().timestamp()), batch_size=args.batch_size,
                                            num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
-                                           weight_penalty=args.weight_decay)
+                                           weight_penalty=args.weight_decay, seed=args.seed)
     emotion_classifier.train(output_every_nth=100)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
@@ -365,6 +370,8 @@ def parse_arguments(argv):
                              'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.1)
     parser.add_argument('--weight_decay', type=float,
                         help='L2 weight regularization.', default=0.0)
+    parser.add_argument('--seed', type=int,
+                        help='Random seed.', default=666)
 
 
     # TODO [p1] need these?
@@ -402,8 +409,6 @@ def parse_arguments(argv):
                         help='Learning rate decay factor.', default=1.0)
     parser.add_argument('--moving_average_decay', type=float,
                         help='Exponential decay for tracking of training parameters.', default=0.9999)
-    parser.add_argument('--seed', type=int,
-                        help='Random seed.', default=666)
     parser.add_argument('--log_histograms',
                         help='Enables logging of weight/bias histograms in tensorboard.', action='store_true')
     parser.add_argument('--learning_rate_schedule_file', type=str,
