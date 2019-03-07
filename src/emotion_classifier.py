@@ -16,12 +16,14 @@ import math
 from tensorflow.python.ops import data_flow_ops
 from data_loader import DataLoader
 from datetime import datetime
+from my_constants import Constants
 
 
 class EmotionClassifier:
     def __init__(self, filename, model_name, layer_sizes=[128, 128], num_epochs=500, batch_size=90,
                  learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
                  clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/'):
+        self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
         and building the graph.
         Args:
@@ -44,6 +46,7 @@ class EmotionClassifier:
             checkpoint_dir: the directly where the model will save checkpoints,
                 saved files containing trained network weights.
             '''
+
         # Hyperparameters that should be tuned
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
@@ -53,12 +56,9 @@ class EmotionClassifier:
         self.weight_penalty = weight_penalty
 
         # Hyperparameters that could be tuned
-        # (but are probably the best to use)
         self.clip_gradients = clip_gradients
         self.activation_func = 'relu'
         self.optimizer = tf.train.AdamOptimizer
-
-
 
         # Extract the data from the filename
         self.data_loader = DataLoader(filename, import_embedding=True)
@@ -72,7 +72,9 @@ class EmotionClassifier:
 
         # Set up and initialize tensorflow session.
         self.session = tf.Session(graph=self.graph)
-        self.session.run(self.init)
+        self.session.run(self.global_init)
+        self.session.run(self.local_init)
+        # self.session.run(tf.local_variables_initializer())
 
         # Logistics
         self.checkpoint_dir = checkpoint_dir
@@ -83,6 +85,9 @@ class EmotionClassifier:
         # Tensorboard
         self.train_summary_writer = tf.summary.FileWriter(os.path.join(self.checkpoint_dir, 'train'), self.graph)
         self.valid_summary_writer = tf.summary.FileWriter(os.path.join(self.checkpoint_dir, 'validation'))
+
+    def _plus_eps(self, inp):
+        return tf.add(inp, self.epsilon)
 
     def initialize_network_weights(self):
         """Constructs Tensorflow variables for the weights and biases
@@ -117,8 +122,8 @@ class EmotionClassifier:
         print('Building computation graph...')
 
         with self.graph.as_default():
-            self.tf_x = tf.placeholder(tf.float32, name="x")  # features
-            self.tf_y = tf.placeholder(tf.float32, name="y")  # labels
+            self.tf_x = tf.placeholder(tf.float32, shape=(self.batch_size, self.input_size), name="x")  # features
+            self.tf_y = tf.placeholder(tf.float32, shape=(self.batch_size, self.output_size), name="y")  # labels
             self.tf_dropout_prob = tf.placeholder(tf.float32)  # Implements dropout
 
             # TODO [p1] add loading from previous checkpoint
@@ -147,7 +152,7 @@ class EmotionClassifier:
 
             # Apply a softmax function to get probabilities, train this dist against targets with
             # cross entropy loss.
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=self.logits, labels=self.tf_y))
+            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.logits, labels=self.tf_y))
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -155,8 +160,26 @@ class EmotionClassifier:
             self.class_probabilities = tf.nn.softmax(self.logits)
             self.predictions = tf.argmax(self.class_probabilities, axis=1)
             self.target = tf.argmax(self.tf_y, axis=1)
-            self.correct_prediction = tf.equal(self.predictions, self.target)
-            self.accuracy = tf.reduce_mean(tf.cast(self.correct_prediction, tf.float32))
+
+
+            self.kl = tf.reduce_sum(self._plus_eps(self.tf_y) * tf.log(
+                self._plus_eps(self.tf_y) / self._plus_eps(self.class_probabilities)))
+            self.log_loss = - tf.reduce_sum(
+                self._plus_eps(self.tf_y) * tf.log(self._plus_eps(self.class_probabilities)) + (
+                            tf.ones_like(self.tf_y) - self._plus_eps(self.tf_y)) * tf.log(
+                    tf.ones_like(self.class_probabilities) - self._plus_eps(self.class_probabilities)))
+            self.accuracy, _ = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
+            self.mse, _ = tf.metrics.mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
+                                                        name='metrics')
+            self.rmse, _ = tf.metrics.root_mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
+                                                        name='metrics')
+            self.mean_per_class_accuracy, _ = tf.metrics.mean_per_class_accuracy(labels=self.target,
+                                                                                 predictions=self.predictions,
+                                                                                 num_classes=Constants.get_no_emotions(),
+                                                                                 name='metrics')
+            self.mean_cosine_distance, _ = tf.metrics.mean_cosine_distance(labels=self.tf_y,
+                                                                           predictions=self.class_probabilities, dim=1,
+                                                                           name='metrics')
 
             # Set up backpropagation computation
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -168,12 +191,25 @@ class EmotionClassifier:
             self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.params),
                                                               self.global_step)
 
+            [tf.summary.histogram("%s-grad" % g[1].name, g[0]) for g in self.gradients]
             tf.summary.scalar('accuracy', self.accuracy)
             tf.summary.scalar('loss', self.loss)
             tf.summary.histogram('logits', self.logits)
+            tf.summary.scalar('distance_metrics/KL', self.kl)
+            tf.summary.scalar('distance_metrics/Log-loss', self.log_loss)
+            tf.summary.scalar('distance_metrics/MSE', self.mse)
+            tf.summary.scalar('distance_metrics/RMSE', self.rmse)
+            tf.summary.scalar('distance_metrics/mean-per-class-accuracy', self.mean_per_class_accuracy)
+            tf.summary.scalar('distance_metrics/mean-cosine-distance', self.mean_cosine_distance)
             self.summaries = tf.summary.merge_all()
 
-            self.init = tf.global_variables_initializer()
+            # Isolate the variables stored behind the scenes by the metric operation
+            running_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="metrics")
+
+            # Define initializer to initialize/reset running variables
+            self.local_init = tf.variables_initializer(var_list=running_vars)
+
+            self.global_init = tf.global_variables_initializer()
 
     def train(self, output_every_nth=None):
         """Trains using stochastic gradient descent (SGD).
@@ -225,11 +261,11 @@ class EmotionClassifier:
                     # Save a checkpoint of the model
                     self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=step)
 
-    def predict(self, X, get_probabilities=False):
+    def predict(self, x, get_probabilities=False):
         """Gets the network's predictions for some new data X
 
         Args:
-            X: a matrix of data in the same format as the training
+            x: a matrix of data in the same format as the training
                 data.
             get_probabilities: a boolean that if true, will cause
                 the function to return the model's computed softmax
@@ -240,7 +276,7 @@ class EmotionClassifier:
             classification, otherwise float predictions if the
             model is doing regression.
         """
-        feed_dict = {self.tf_x: X,
+        feed_dict = {self.tf_x: x,
                      self.tf_dropout_prob: 1.0}  # no dropout during evaluation
 
         probs, preds = self.session.run([self.class_probabilities, self.predictions],
@@ -317,7 +353,7 @@ def parse_arguments(argv):
                         default='/mas/u/asma_gh/uncnet/logs/',
                         help='Directory where to write event logs.')
     parser.add_argument('--max_nrof_epochs', type=int,
-                        help='Number of epochs to run.', default=500)
+                        help='Number of epochs to run.', default=1000000)
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)
     parser.add_argument('--hidden_layer_size', type=list,
