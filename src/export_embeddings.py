@@ -36,7 +36,7 @@ def main(args):
 
             # Run forward pass to calculate embeddings
             print('Calculating features for images')
-            nrof_images = data_loader.get_nrofsampels()
+            nrof_images = data_loader.get_nrof_samples()
             nrof_batches_per_epoch = int(math.ceil(1.0 * nrof_images / args.batch_size))
             emb_array = np.zeros((nrof_images, embedding_size))
             for i in range(nrof_batches_per_epoch):
@@ -50,7 +50,8 @@ def main(args):
             print(f'embedding shape: {np.shape(emb_array)}')
             if not os.path.exists(args.embedding_dir):
                 os.makedirs(args.embedding_dir)
-            pickle.dump(emb_array, open(os.path.join(args.embedding_dir, 'embeddings.pkl'), 'wb'))
+            postfix = args.model[args.model.rfind('/')+1:]
+            pickle.dump(emb_array, open(os.path.join(args.embedding_dir, f'embeddings_{postfix}.pkl'), 'wb'))
 
 
 def parse_arguments(argv):
@@ -63,7 +64,7 @@ def parse_arguments(argv):
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/embedding/',
                         help='Path to the embedding pkl file.')
     parser.add_argument('--model', type=str,
-                        default='/mas/u/asma_gh/uncnet/pretrained_models/CASIA_WebFace_Inception_ResNet_v1',
+                        default='/mas/u/asma_gh/uncnet/pretrained_models/VGGFace2_Inception_ResNet_v1', #CASIA_WebFace_Inception_ResNet_v1
                         help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file')
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)

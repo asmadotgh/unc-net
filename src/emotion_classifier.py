@@ -62,7 +62,8 @@ class EmotionClassifier:
 
         # Extract the data from the filename
         self.seed = seed
-        self.data_loader = DataLoader(filename, import_embedding=True, seed=self.seed)
+        self.data_loader = DataLoader(filename, import_embedding=True, embedding_type='VGGFace2_Inception_ResNet_v1',
+                                      seed=self.seed)
         self.input_size = self.data_loader.get_embedding_size()
         self.output_size = self.data_loader.get_num_classes()
         self.metric_name = 'accuracy'
