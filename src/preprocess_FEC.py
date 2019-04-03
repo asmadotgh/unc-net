@@ -56,12 +56,15 @@ class ImageDownloader:
         except:
             print(f'Error downloading {url}. Skipping image.')
             return
-        img = Image.open(raw_filename)
-        img_width, img_height = img.size
-        cropped_img = img.crop(bounding_box.get_area(width=img_width, height=img_height))
-        img_size = Constants.get_output_image_size()
-        resized_img = cropped_img.resize((img_size, img_size))
-        resized_img.save(processed_filename)
+        try:
+            img = Image.open(raw_filename)
+            img_width, img_height = img.size
+            cropped_img = img.crop(bounding_box.get_area(width=img_width, height=img_height))
+            img_size = Constants.get_output_image_size()
+            resized_img = cropped_img.resize((img_size, img_size))
+            resized_img.save(processed_filename)
+        except:
+            print(f'Error reading image {raw_filename}. Skipping processing image.')
 
     def retrieve_images(self):
         if os.path.exists(self.images_dir):
@@ -72,8 +75,15 @@ class ImageDownloader:
             os.makedirs(self.images_dir+'raw/')
             os.makedirs(self.images_dir + 'processed/')
         for idx, row in self.dataset.iterrows():
+            # TODO remove this for later
+            if idx < 24788:
+                continue
             for i in range(3):
                 url = row[i*5]
+                if url.endswith('.gif') or url.endswith('.GIF') or url.endswith('.png') or url.endswith('.PNG'):
+                    print(f'Unsupported format {url}. Skipping image.')
+                    continue
+                # print(f'idx: {idx}, i: {i}, url: {url}')
                 bounding_box = BoundingBox(top_left_column=row[i*5+1],
                                            bottom_right_column=row[i*5+2],
                                            top_left_row=row[i*5+3],
