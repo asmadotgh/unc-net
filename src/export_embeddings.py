@@ -30,11 +30,10 @@ def main(args):
             data_loader.load_model(args.model)
 
             # print operations
-            for op in tf.get_default_graph().get_operations():
-                print(op.name)
+            # for op in tf.get_default_graph().get_operations():
+            #     print(op.name)
 
             tf.summary.FileWriter(os.path.join(args.model, 'graph'), tf.get_default_graph())
-            import pdb; pdb.set_trace()
 
             # Get input and output tensors
             images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")

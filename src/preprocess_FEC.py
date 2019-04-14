@@ -50,49 +50,67 @@ class ImageDownloader:
         elif 'test' in file_path:
             self.images_dir = self.root_dir + 'images/test/'
 
-    def download_image(self, url, bounding_box, raw_filename, processed_filename):
-        try:
-            urllib.request.urlretrieve(url, raw_filename)
-        except:
-            print(f'Error downloading {url}. Skipping image.')
-            return
-        try:
-            img = Image.open(raw_filename)
-            img_width, img_height = img.size
-            cropped_img = img.crop(bounding_box.get_area(width=img_width, height=img_height))
-            img_size = Constants.get_output_image_size()
-            resized_img = cropped_img.resize((img_size, img_size))
-            resized_img.save(processed_filename)
-        except:
-            print(f'Error reading image {raw_filename}. Skipping processing image.')
+    def download_image(self, url, bounding_box, raw_filename, processed_filename, step):
 
-    def retrieve_images(self):
-        if os.path.exists(self.images_dir):
-            print('Images have been previously downloaded. Aborting image retrieval.')
-            # return
+        # Downloading images
+        if step == 1:
+            try:
+                request = urllib.request.urlopen(url, timeout=5)
+                with open(raw_filename, 'wb') as f:
+                    f.write(request.read())
+            except Exception as e:
+                print(f'{str(e)}. Error downloading image {url}. Skipping downloading image.')
+
+        # Processing downloaded image
+        elif step == 2:
+            try:
+                img = Image.open(raw_filename)
+                img_width, img_height = img.size
+                cropped_img = img.crop(bounding_box.get_area(width=img_width, height=img_height))
+                img_size = Constants.get_output_image_size()
+                resized_img = cropped_img.resize((img_size, img_size))
+                resized_img.save(processed_filename)
+            except Exception as e:
+                print(f'{str(e)}. Error reading image {raw_filename}. Skipping processing image.')
         else:
+            print(f'Step {step} not supported. Valid options: 1 - download images. 2 - preprocess images.')
+
+    def retrieve_images(self, step):
+        print(f'Running step {step}...')
+        if not os.path.exists(self.images_dir):
+            print('Creating directories ...')
             os.makedirs(self.images_dir)
-            os.makedirs(self.images_dir+'raw/')
+            os.makedirs(self.images_dir + 'raw/')
             os.makedirs(self.images_dir + 'processed/')
+
         for idx, row in self.dataset.iterrows():
             # TODO remove this for later
-            if idx < 24788:
+            if idx < 37646:
                 continue
             for i in range(3):
                 url = row[i*5]
                 if url.endswith('.gif') or url.endswith('.GIF') or url.endswith('.png') or url.endswith('.PNG'):
                     print(f'Unsupported format {url}. Skipping image.')
                     continue
-                # print(f'idx: {idx}, i: {i}, url: {url}')
+                print(f'\033[1A\033[K idx: {idx}, i: {i}, url: {url}')
                 bounding_box = BoundingBox(top_left_column=row[i*5+1],
                                            bottom_right_column=row[i*5+2],
                                            top_left_row=row[i*5+3],
                                            bottom_right_row=row[i*5+4])
                 raw_filename = self.images_dir+f'raw/{idx}_{i}.jpg'
                 processed_filename = self.images_dir + f'processed/{idx}_{i}.jpg'
-                self.download_image(url, bounding_box, raw_filename, processed_filename)
+                self.download_image(url, bounding_box, raw_filename, processed_filename, step)
 
 
+# CUDA_VISIBLE_DEVICES=3 python preprocess_FEC.py --file_path='/mas/u/asma_gh/uncnet/datasets/FEC_dataset/faceexp-comparison-data-test-public.csv'
+
+# total #test: 51,060
+# total #train: 449,143
+
+
+# Example use cases:
+# CUDA_VISIBLE_DEVICES=3 python preprocess_FEC.py --file_path='/mas/u/asma_gh/uncnet/datasets/FEC_dataset/faceexp-comparison-data-train-public.csv'
+# CUDA_VISIBLE_DEVICES=3 python preprocess_FEC.py --file_path='/mas/u/asma_gh/uncnet/datasets/FEC_dataset/faceexp-comparison-data-test-public.csv'
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--file_path', type=str,
@@ -100,4 +118,7 @@ if __name__ == '__main__':
                         help='Path to the file containing image directories and labels.')
     args = parser.parse_args()
     image_downloader = ImageDownloader(args.file_path)
-    image_downloader.retrieve_images()
+    # Download images
+    image_downloader.retrieve_images(step=1)
+    # Resize images
+    image_downloader.retrieve_images(step=2)
