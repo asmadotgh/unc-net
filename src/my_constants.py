@@ -22,3 +22,15 @@ class Constants:
         Needed for proper reading of the dataset as a pandas dataframe.
         """
         return 11
+
+    @staticmethod
+    def get_embedding_tensor_name(inp):
+        embedding_dict = {'Mixed_8b': 'InceptionResnetV1/Logits/AvgPool_1a_8x8/AvgPool:0',
+                          'Mixed_8a': 'InceptionResnetV1/Block8:0', 'Mixed_7a': 'InceptionResnetV1/Repeat2:0',
+                          'Mixed_6b': 'InceptionResnetV1/Mixed_7a:0', 'Mixed_6a': 'InceptionResnetV1/Repeat1:0',
+                          'Mixed_5a': 'InceptionResnetV1/Mixed_6a:0', 'default': 'embeddings:0'}
+        for key in embedding_dict.keys():
+            if key == inp:
+                return embedding_dict[key]
+        print(f'Embedding {inp} not supported. Returning default embeddings:0.')
+        return 'embeddings:0'

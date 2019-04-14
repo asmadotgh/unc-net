@@ -10,6 +10,7 @@ import math
 from data_loader import DataLoader
 import pickle
 import os
+from my_constants import Constants
 
 
 def main(args):
@@ -28,9 +29,17 @@ def main(args):
             print('Loading feature extraction model')
             data_loader.load_model(args.model)
 
+            # print operations
+            for op in tf.get_default_graph().get_operations():
+                print(op.name)
+
+            tf.summary.FileWriter(os.path.join(args.model, 'graph'), tf.get_default_graph())
+            import pdb; pdb.set_trace()
+
             # Get input and output tensors
             images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-            embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+            embeddings = tf.get_default_graph().get_tensor_by_name(
+                Constants.get_embedding_tensor_name(args.embedding_name))
             phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
             embedding_size = embeddings.get_shape()[1]
 
@@ -51,7 +60,8 @@ def main(args):
             if not os.path.exists(args.embedding_dir):
                 os.makedirs(args.embedding_dir)
             postfix = args.model[args.model.rfind('/')+1:]
-            pickle.dump(emb_array, open(os.path.join(args.embedding_dir, f'embeddings_{postfix}.pkl'), 'wb'))
+            pickle.dump(emb_array,
+                        open(os.path.join(args.embedding_dir, f'embeddings_{postfix}_{args.embedding_name}.pkl'), 'wb'))
 
 
 def parse_arguments(argv):
@@ -63,6 +73,9 @@ def parse_arguments(argv):
     parser.add_argument('--embedding_dir', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/embedding/',
                         help='Path to the embedding pkl file.')
+    parser.add_argument('--embedding_name', type=str,
+                        default='Mixed_5a',
+                        help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_5a, default.')
     parser.add_argument('--model', type=str,
                         default='/mas/u/asma_gh/uncnet/pretrained_models/VGGFace2_Inception_ResNet_v1', #CASIA_WebFace_Inception_ResNet_v1
                         help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file')
