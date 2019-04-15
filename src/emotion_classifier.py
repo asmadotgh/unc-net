@@ -240,9 +240,11 @@ class EmotionClassifier:
                         _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch(self.batch_size)
                         val_feed_dict = {self.tf_x: valid_embeddings,
                                          self.tf_y: valid_labels,
-                                         self.tf_dropout_prob: 1.0}  # TODO [p1] add dropout for epistemic bayesian
+                                         self.tf_dropout_prob: 1.0}
+                        # TODO [p0] add dropout for epistemic bayesian
+                        # TODO [p0] add dropout for aleatoric bayesian
 
-                        # TODO reset metrics?
+                        # TODO [p0] reset metrics?
                         # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
                         # sess.run(tf.variables_initializer(stream_vars_valid))
 
@@ -342,8 +344,6 @@ def main(args):
     emotion_classifier.train(output_every_nth=100)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
-
-    # TODO [p1] change to tf.slim or sth for more compact presentation?
 
 
 def parse_arguments(argv):
