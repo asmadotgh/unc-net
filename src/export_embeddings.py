@@ -53,7 +53,6 @@ def main(args):
             feed_dict = {images_placeholder: images}
             emb_array[start_index:end_index, :] = sess.run(embeddings, feed_dict=feed_dict)
             print(f'\033[1A\033[KBatch {i} done!')
-            import pdb; pdb.set_trace()
 
         print(f'embedding shape: {np.shape(emb_array)}')
         if not os.path.exists(args.embedding_dir):
