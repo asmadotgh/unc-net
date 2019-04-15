@@ -10,14 +10,16 @@ num_models=${#embedding_model_list[@]}
 num_layers=${#embedding_layer_list[@]}
 
 gpu_id=0
-for embedding_model in embedding_models
+for embedding_model in $embedding_models
 do
-    for embedding_layer in embedding_layers
+    for embedding_layer in $embedding_layers
     do
         if (($gpu_id == $((num_models*num_layers-1)) ))
         then
+            echo "Running... CUDA_VISIBLE_DEVICES=$(($gpu_id % 4)) python emotion_classifier.py --embedding_model=$embedding_model --embedding_layer=$embedding_layer"
             CUDA_VISIBLE_DEVICES=$(($gpu_id % 4)) python emotion_classifier.py --embedding_model="$embedding_model" --embedding_layer="$embedding_layer"
         else
+            echo "Running... CUDA_VISIBLE_DEVICES=$(($gpu_id % 4)) python emotion_classifier.py --embedding_model=$embedding_model --embedding_layer=$embedding_layer &"
             CUDA_VISIBLE_DEVICES=$(($gpu_id % 4)) python emotion_classifier.py --embedding_model="$embedding_model" --embedding_layer="$embedding_layer" &
         fi
         ((gpu_id++))
