@@ -25,12 +25,16 @@ class Constants:
 
     @staticmethod
     def get_embedding_tensor_name(inp):
-        embedding_dict = {'Mixed_8b': 'InceptionResnetV1/Logits/AvgPool_1a_8x8/AvgPool:0',
-                          'Mixed_8a': 'InceptionResnetV1/Block8:0', 'Mixed_7a': 'InceptionResnetV1/Repeat2:0',
-                          'Mixed_6b': 'InceptionResnetV1/Mixed_7a:0', 'Mixed_6a': 'InceptionResnetV1/Repeat1:0',
+        """
+        This function returns the tensor name in the graph for the inputted embedding layer.
+        """
+        # TODO: current tensor names are wrong. Replace.
+        embedding_dict = {'Mixed_8b': 'InceptionResnetV1/Logits/AvgPool_1a_8x8/AvgPool',
+                          'Mixed_8a': 'InceptionResnetV1/Block8', 'Mixed_7a': 'InceptionResnetV1/Repeat2',
+                          'Mixed_6b': 'InceptionResnetV1/Mixed_7a', 'Mixed_6a': 'InceptionResnetV1/Repeat1',
                           'Mixed_5a': 'InceptionResnetV1/Mixed_6a:0', 'default': 'embeddings:0'}
         for key in embedding_dict.keys():
             if key == inp:
                 return embedding_dict[key]
         print(f'Embedding {inp} not supported. Returning default embeddings:0.')
-        return 'embeddings:0'
+        return embedding_dict['default']
