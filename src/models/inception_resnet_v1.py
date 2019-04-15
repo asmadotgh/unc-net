@@ -126,7 +126,8 @@ def reduction_b(net):
     net = tf.concat([tower_conv_1, tower_conv1_1,
                         tower_conv2_2, tower_pool], 3)
     return net
-  
+
+
 def inference(images, keep_probability, phase_train=True, 
               bottleneck_layer_size=128, weight_decay=0.0, reuse=None):
     batch_norm_params = {
@@ -137,7 +138,7 @@ def inference(images, keep_probability, phase_train=True,
         # force in-place updates of mean and variance estimates
         'updates_collections': None,
         # Moving averages ends up in the trainable variables collection
-        'variables_collections': [ tf.GraphKeys.TRAINABLE_VARIABLES ],
+        'variables_collections': [tf.GraphKeys.TRAINABLE_VARIABLES],
     }
     
     with slim.arg_scope([slim.conv2d, slim.fully_connected],
@@ -201,32 +202,57 @@ def inception_resnet_v1(inputs, is_training=True,
                 net = slim.conv2d(net, 256, 3, stride=2, padding='VALID',
                                   scope='Conv2d_4b_3x3')
                 end_points['Conv2d_4b_3x3'] = net
-                
+
                 # 5 x Inception-resnet-A
                 net = slim.repeat(net, 5, block35, scale=0.17)
                 end_points['Mixed_5a'] = net
-        
+                tmp_net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
+                                      scope='AvgPool_5a_AG')
+                tmp_net = slim.flatten(tmp_net)
+                end_points['Mixed_5a_flatten'] = tmp_net
+
                 # Reduction-A
                 with tf.variable_scope('Mixed_6a'):
                     net = reduction_a(net, 192, 192, 256, 384)
                 end_points['Mixed_6a'] = net
-                
+                tmp_net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
+                                      scope='AvgPool_6a_AG')
+                tmp_net = slim.flatten(tmp_net)
+                end_points['Mixed_6a_flatten'] = tmp_net
+
                 # 10 x Inception-Resnet-B
                 net = slim.repeat(net, 10, block17, scale=0.10)
                 end_points['Mixed_6b'] = net
-                
+                tmp_net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
+                                      scope='AvgPool_6b_AG')
+                tmp_net = slim.flatten(tmp_net)
+                end_points['Mixed_6b_flatten'] = tmp_net
+
                 # Reduction-B
                 with tf.variable_scope('Mixed_7a'):
                     net = reduction_b(net)
                 end_points['Mixed_7a'] = net
-                
+                tmp_net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
+                                      scope='AvgPool_7a_AG')
+                tmp_net = slim.flatten(tmp_net)
+                end_points['Mixed_7a_flatten'] = tmp_net
+
                 # 5 x Inception-Resnet-C
                 net = slim.repeat(net, 5, block8, scale=0.20)
                 end_points['Mixed_8a'] = net
-                
+                tmp_net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
+                                      scope='AvgPool_8a_AG')
+                tmp_net = slim.flatten(tmp_net)
+                end_points['Mixed_8a_flatten'] = tmp_net
+
                 net = block8(net, activation_fn=None)
                 end_points['Mixed_8b'] = net
-                
+                tmp_net = slim.avg_pool2d(net, net.get_shape()[1:3], padding='VALID',
+                                      scope='AvgPool_8b_AG')
+                tmp_net = slim.flatten(tmp_net)
+                end_points['Mixed_8b_flatten'] = tmp_net
+
+
                 with tf.variable_scope('Logits'):
                     end_points['PrePool'] = net
                     #pylint: disable=no-member
