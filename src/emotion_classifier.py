@@ -2,21 +2,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from datetime import datetime
+import datetime
 import os.path
-import time
 import sys
-import random
 import tensorflow as tf
-import numpy as np
-import importlib
 import argparse
-import h5py
 import math
-from tensorflow.python.ops import data_flow_ops
 from data_loader import DataLoader
-from datetime import datetime
-from my_constants import Constants
 
 
 class EmotionClassifier:
@@ -170,16 +162,12 @@ class EmotionClassifier:
                 self._plus_eps(self.tf_y) * tf.log(self._plus_eps(self.class_probabilities)) + (
                             tf.ones_like(self.tf_y) - self._plus_eps(self.tf_y)) * tf.log(
                     tf.ones_like(self.class_probabilities) - self._plus_eps(self.class_probabilities)))
-            self.accuracy, _ = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
-            self.mse, _ = tf.metrics.mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
+            self.acc, self.acc_op = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
+            self.mse, self.mse_op = tf.metrics.mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
                                                         name='metrics')
-            self.rmse, _ = tf.metrics.root_mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
+            self.rmse, self.rmse_op = tf.metrics.root_mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
                                                         name='metrics')
-            self.mean_per_class_accuracy, _ = tf.metrics.mean_per_class_accuracy(labels=self.target,
-                                                                                 predictions=self.predictions,
-                                                                                 num_classes=Constants.get_no_emotions(),
-                                                                                 name='metrics')
-            self.mean_cosine_distance, _ = tf.metrics.mean_cosine_distance(labels=self.tf_y,
+            self.mean_cosine_distance, self.mean_cosine_distance_op = tf.metrics.mean_cosine_distance(labels=self.tf_y,
                                                                            predictions=self.class_probabilities, dim=1,
                                                                            name='metrics')
 
@@ -194,15 +182,14 @@ class EmotionClassifier:
                                                               self.global_step)
 
             [tf.summary.histogram("%s-grad" % g[1].name, g[0]) for g in self.gradients]
-            tf.summary.scalar('accuracy', self.accuracy)
+            tf.summary.scalar('accuracy', self.acc_op)
             tf.summary.scalar('loss', self.loss)
             tf.summary.histogram('logits', self.logits)
             tf.summary.scalar('distance_metrics/KL', self.kl)
             tf.summary.scalar('distance_metrics/Log-loss', self.log_loss)
-            tf.summary.scalar('distance_metrics/MSE', self.mse)
-            tf.summary.scalar('distance_metrics/RMSE', self.rmse)
-            tf.summary.scalar('distance_metrics/mean-per-class-accuracy', self.mean_per_class_accuracy)
-            tf.summary.scalar('distance_metrics/mean-cosine-distance', self.mean_cosine_distance)
+            tf.summary.scalar('distance_metrics/MSE', self.mse_op)
+            tf.summary.scalar('distance_metrics/RMSE', self.rmse_op)
+            tf.summary.scalar('distance_metrics/mean-cosine-distance', self.mean_cosine_distance_op)
             self.summaries = tf.summary.merge_all()
 
             # Isolate the variables stored behind the scenes by the metric operation
@@ -245,7 +232,7 @@ class EmotionClassifier:
 
                     # Update parameters in the direction of the gradient computed by
                     # the optimizer.
-                    _ = self.session.run([self.opt_step], feed_dict)
+                    _, = self.session.run([self.opt_step], feed_dict)
 
                     # Output/save the training and validation performance every few steps.
                     if step % self.output_every_nth == 0:
@@ -255,10 +242,14 @@ class EmotionClassifier:
                                          self.tf_y: valid_labels,
                                          self.tf_dropout_prob: 1.0}  # TODO [p1] add dropout for epistemic bayesian
 
+                        # TODO reset metrics?
+                        # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
+                        # sess.run(tf.variables_initializer(stream_vars_valid))
+
                         train_summaries, train_score, train_loss = self.session.run(
-                            [self.summaries, self.accuracy, self.loss], feed_dict)
+                            [self.summaries, self.acc_op, self.loss], feed_dict)
                         valid_summaries, valid_score, valid_loss = self.session.run(
-                            [self.summaries, self.accuracy, self.loss], val_feed_dict)
+                            [self.summaries, self.acc_op, self.loss], val_feed_dict)
 
                         self.train_summary_writer.add_summary(train_summaries, global_step=global_step)
                         self.valid_summary_writer.add_summary(valid_summaries, global_step=global_step)
@@ -318,7 +309,7 @@ class EmotionClassifier:
                      self.tf_y: y,
                      self.tf_dropout_prob: 1.0}  # no dropout during evaluation
 
-        score = self.session.run(self.accuracy, feed_dict)
+        score = self.session.run(self.acc_op, feed_dict)
 
         return score
 
@@ -338,9 +329,12 @@ def bias_variable(shape, name):
 
 
 def main(args):
+    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(datetime.date.today().strftime("%Y_%m_%d"))}'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
                                            embedding_model=args.embedding_model, embedding_layer=args.embedding_layer,
-                                           checkpoint_dir=args.logs_base_dir+str(datetime.now().timestamp()),
+                                           checkpoint_dir=log_dir,
                                            batch_size=args.batch_size,
                                            num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,

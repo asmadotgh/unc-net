@@ -29,7 +29,8 @@ def main(args):
                                             shape=(None, args.image_size, args.image_size, 3),
                                             name='input')
 
-        # keep probability is 1.0 because we are not doing bayesian epistemic uncertainty yet
+        # keep probability is 1.0
+        # because we are not doing bayesian epistemic uncertainty on the embedding space
         _, endpoints = network.inference(images_placeholder, keep_probability=1.0, bottleneck_layer_size=512,
                                          phase_train=phase_train_bool)
         embeddings = endpoints[f'{args.embedding_name}_flatten']
