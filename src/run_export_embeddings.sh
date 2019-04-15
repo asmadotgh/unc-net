@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-subsets='train valid test'
-embeddings='Mixed_8b Mixed_8a Mixed_7a Mixed_6b Mixed_5a'
+#subsets='all train valid test'
+subsets='all'
+embeddings='Mixed_8b Mixed_8a Mixed_7a Mixed_6b Mixed_6a Mixed_5a'
 
 subset_list=( $subsets )
 embedding_list=( $embeddings )

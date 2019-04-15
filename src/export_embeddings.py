@@ -75,7 +75,7 @@ def parse_arguments(argv):
                         help='Path to the embedding pkl file.')
     parser.add_argument('--embedding_name', type=str,
                         default='Mixed_5a',
-                        help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_5a.')
+                        help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_6a, Mixed_5a.')
     parser.add_argument('--model', type=str,
                         default='/mas/u/asma_gh/uncnet/pretrained_models/VGGFace2_Inception_ResNet_v1', #CASIA_WebFace_Inception_ResNet_v1
                         help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file')
