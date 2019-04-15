@@ -20,9 +20,9 @@ from my_constants import Constants
 
 
 class EmotionClassifier:
-    def __init__(self, filename, model_name, layer_sizes=[128, 128], num_epochs=500, batch_size=90,
-                 learning_rate=.01, dropout_prob=1.0, weight_penalty=0.0,
-                 clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666):
+    def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
+                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.01, dropout_prob=1.0,
+                 weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
         and building the graph.
@@ -47,6 +47,14 @@ class EmotionClassifier:
                 saved files containing trained network weights.
             '''
 
+        # Logistics
+        self.checkpoint_dir = checkpoint_dir
+        self.filename = filename
+        self.model_name = model_name
+        self.output_every_nth = 10
+        self.embedding_model = embedding_model
+        self.embedding_layer = embedding_layer
+
         # Hyperparameters that should be tuned
         self.layer_sizes = layer_sizes
         self.batch_size = batch_size
@@ -62,8 +70,8 @@ class EmotionClassifier:
 
         # Extract the data from the filename
         self.seed = seed
-        self.data_loader = DataLoader(filename, import_embedding=True, embedding_type='VGGFace2_Inception_ResNet_v1',
-                                      seed=self.seed)
+        self.data_loader = DataLoader(filename, import_embedding=True, embedding_model=self.embedding_model,
+                                      embedding_layer=self.embedding_layer, seed=self.seed)
         self.input_size = self.data_loader.get_embedding_size()
         self.output_size = self.data_loader.get_num_classes()
         self.metric_name = 'accuracy'
@@ -77,12 +85,6 @@ class EmotionClassifier:
         self.session.run(self.global_init)
         self.session.run(self.local_init)
         # self.session.run(tf.local_variables_initializer())
-
-        # Logistics
-        self.checkpoint_dir = checkpoint_dir
-        self.filename = filename
-        self.model_name = model_name
-        self.output_every_nth = 10
 
         # Tensorboard
         self.train_summary_writer = tf.summary.FileWriter(os.path.join(self.checkpoint_dir, 'train'), self.graph)
@@ -128,7 +130,6 @@ class EmotionClassifier:
             self.tf_y = tf.placeholder(tf.float32, shape=(None, self.output_size), name="y")  # labels
             self.tf_dropout_prob = tf.placeholder(tf.float32)  # Implements dropout
 
-            # TODO [p1] add loading from previous checkpoint
             self.initialize_network_weights()
 
             # Defines the actual network computations using the weights.
@@ -338,7 +339,9 @@ def bias_variable(shape, name):
 
 def main(args):
     emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
-                                           checkpoint_dir=args.logs_base_dir+str(datetime.now().timestamp()), batch_size=args.batch_size,
+                                           embedding_model=args.embedding_model, embedding_layer=args.embedding_layer,
+                                           checkpoint_dir=args.logs_base_dir+str(datetime.now().timestamp()),
+                                           batch_size=args.batch_size,
                                            num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
                                            weight_penalty=args.weight_decay, seed=args.seed)
@@ -355,6 +358,13 @@ def parse_arguments(argv):
     parser.add_argument('--file_path', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
                         help='Path to the data file containing aligned faces/labels.')
+    parser.add_argument('--embedding_model', type=str,
+                        default='VGGFace2_Inception_ResNet_v1',
+                        help='The pre-trained model to use for exporting embedding. '
+                             'Options: VGGFace2_Inception_ResNet_v1, CASIA_WebFace_Inception_ResNet_v1')
+    parser.add_argument('--embedding_layer', type=str,
+                        default='Mixed_5a',
+                        help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_5a.')
     parser.add_argument('--model_name', type=str,
                         help='Model name.',
                         default='FC')
@@ -366,7 +376,7 @@ def parse_arguments(argv):
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)
     parser.add_argument('--hidden_layer_size', type=list,
-                        help='Dimensionality of the embedding.', default=[128, 128])
+                        help='Dimensionality of FC layers.', default=[128, 128])
     parser.add_argument('--keep_probability', type=float,
                         help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
     parser.add_argument('--learning_rate', type=float,

@@ -12,13 +12,15 @@ import pickle
 
 class DataLoader:
     def __init__(self, file_path, in_image_size=48, out_image_size=160, import_embedding=True,
-                 embedding_type='VGGFace2_Inception_ResNet_v1', seed=666):
+                 embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a', seed=666):
         self.seed = seed
         np.random.seed(self.seed)
         self.root_dir = file_path[:file_path.rfind('/') + 1]
+        self.subset = file_path[file_path.rfind('/') + 1:-4]
         self.import_embedding = import_embedding
         if self.import_embedding:
-            embedding_file = os.path.join(os.path.join(self.root_dir, 'embedding'), f'embeddings_{embedding_type}.pkl')
+            embedding_dir = os.path.join(os.path.join(self.root_dir, 'embedding'), self.subset)
+            embedding_file = os.path.join(embedding_dir, f'embeddings_{embedding_model}_{embedding_layer}.pkl')
             self.embeddings = pickle.load(open(embedding_file, 'rb'))
             self.embedding_size = np.shape(self.embeddings)[1]
         else:
