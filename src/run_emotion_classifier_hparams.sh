@@ -24,13 +24,14 @@ do
     do
         for learning_rate in "${learning_rate_list[@]}"
         do
+            curr_gpu=${available_gpu_list[$gpu_id % $num_available_gpus]}
             if (($gpu_id == $((num_models*num_layers*num_learning_rates-1)) ))
             then
-                echo "Running... CUDA_VISIBLE_DEVICES=$((available_gpus[$gpu_id] % $num_available_gpus)) python emotion_classifier.py --embedding_model=$embedding_model --embedding_layer=$embedding_layer --learning_rate=$learning_rate"
-                CUDA_VISIBLE_DEVICES=$(("$available_gpus[$gpu_id] % $num_available_gpus")) python emotion_classifier.py --embedding_model="$embedding_model" --embedding_layer="$embedding_layer" --learning_rate="$learning_rate"
+                echo "Running... CUDA_VISIBLE_DEVICES=$curr_gpu python emotion_classifier.py --embedding_model=$embedding_model --embedding_layer=$embedding_layer --learning_rate=$learning_rate"
+                CUDA_VISIBLE_DEVICES="$curr_gpu" python emotion_classifier.py --embedding_model="$embedding_model" --embedding_layer="$embedding_layer" --learning_rate="$learning_rate"
             else
-                echo "Running... CUDA_VISIBLE_DEVICES=$((available_gpus[$gpu_id] % $num_available_gpus)) python emotion_classifier.py --embedding_model=$embedding_model --embedding_layer=$embedding_layer --learning_rate=$learning_rate &"
-                CUDA_VISIBLE_DEVICES=$(("$available_gpus[$gpu_id] % $num_available_gpus")) python emotion_classifier.py --embedding_model="$embedding_model" --embedding_layer="$embedding_layer" --learning_rate="$learning_rate" &
+                echo "Running... CUDA_VISIBLE_DEVICES=$curr_gpu python emotion_classifier.py --embedding_model=$embedding_model --embedding_layer=$embedding_layer --learning_rate=$learning_rate &"
+                CUDA_VISIBLE_DEVICES="$curr_gpu" python emotion_classifier.py --embedding_model="$embedding_model" --embedding_layer="$embedding_layer" --learning_rate="$learning_rate" &
             fi
             ((gpu_id++))
         done
