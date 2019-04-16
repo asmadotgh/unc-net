@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-# note that tensorflow=1.7.0 has been previously used to run this
-# now tensorflow and tensorflow-gpu 1.12.0 are installed
-
 #subsets='all train valid test'
 subsets='all'
 embeddings='Mixed_8b Mixed_8a Mixed_7a Mixed_6b Mixed_6a Mixed_5a'

@@ -278,8 +278,9 @@ class EmotionClassifier:
                     # labels = np.repeat(np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0]]), [self.batch_size], axis=0)
                     # DEBUG - does it overfit to a small training set? Yes, passed
                     # _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=0)
-                    # DEBUG - What about a slightly larger dataset? almost 1/10 of data
-                    _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30)
+                    # DEBUG - What about a slightly larger dataset (almost 1/10 of data)? Yes, Pass
+                    # _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30)
+
                     feed_dict = {self.tf_x: embeddings,
                                  self.tf_y: labels,
                                  self.tf_dropout_prob: self.dropout_prob}
@@ -385,9 +386,18 @@ def bias_variable(shape, name):
 
 
 def main(args):
-    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))}'
+    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(args.learning_rate)}/{str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))}'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    hparam_file = open(os.path.join(log_dir, 'hparams.txt'), 'w')
+    for arg in dir(args):
+        if arg.startswith('_'):
+            continue
+        curr_arg = eval(f'args.{arg}')
+        hparam_file.write(f'{arg}={curr_arg}\n')
+    hparam_file.close()
+
     emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
                                            embedding_model=args.embedding_model, embedding_layer=args.embedding_layer,
                                            checkpoint_dir=log_dir,
