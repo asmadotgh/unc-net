@@ -166,7 +166,7 @@ class EmotionClassifier:
                     tf.ones_like(self.class_probabilities) - self._plus_eps(self.class_probabilities)))
 
             self.acc = tf.reduce_mean(tf.to_float(tf.equal(self.target, self.predictions)))
-            self.mse = tf.reduce_mean(tf.square(tf.subtract(tf.self.tf_y, self.class_probabilities)))
+            self.mse = tf.reduce_mean(tf.square(tf.subtract(self.tf_y, self.class_probabilities)))
             self.rmse = tf.sqrt(self.mse)
 
             self.acc_, self.acc_op = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
@@ -377,7 +377,7 @@ def bias_variable(shape, name):
 
 
 def main(args):
-    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(datetime.date.today().strftime("%Y_%m_%d"))}'
+    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))}'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     emotion_classifier = EmotionClassifier(filename=args.file_path, model_name=args.model_name,
