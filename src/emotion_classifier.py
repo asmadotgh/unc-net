@@ -15,7 +15,7 @@ import numpy as np
 
 class EmotionClassifier:
     def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
-                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.01, dropout_prob=1.0,
+                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
                  weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
@@ -202,13 +202,13 @@ class EmotionClassifier:
                         self.precision_per_class[idx]+self.recall_per_class[idx])
                 # self.AUC_per_class[idx] = tf.constant(np.nan, shape=[1])
 
-                tf.summary.scalar(f'metrics/{emotion_label}/num_target_labels', self.num_target_labels[idx])
-                tf.summary.scalar(f'metrics/{emotion_label}/num_predicted_labels', self.num_predicted_labels[idx])
-                tf.summary.scalar(f'metrics/{emotion_label}/acc', self.acc_per_class[idx])
-                tf.summary.scalar(f'metrics/{emotion_label}/precision', self.precision_per_class[idx])
-                tf.summary.scalar(f'metrics/{emotion_label}/recall', self.recall_per_class[idx])
-                tf.summary.scalar(f'metrics/{emotion_label}/F1', self.f1_per_class[idx])
-                # tf.summary.scalar(f'metrics/{emotion_label}/AUC', self.AUC_per_class[idx])
+                tf.summary.scalar(f'metrics_{emotion_label}/num_target_labels', self.num_target_labels[idx])
+                tf.summary.scalar(f'metrics_{emotion_label}/num_predicted_labels', self.num_predicted_labels[idx])
+                tf.summary.scalar(f'metrics_{emotion_label}/acc', self.acc_per_class[idx])
+                tf.summary.scalar(f'metrics_{emotion_label}/precision', self.precision_per_class[idx])
+                tf.summary.scalar(f'metrics_{emotion_label}/recall', self.recall_per_class[idx])
+                tf.summary.scalar(f'metrics_{emotion_label}/F1', self.f1_per_class[idx])
+                # tf.summary.scalar(f'metrics_{emotion_label}/AUC', self.AUC_per_class[idx])
 
 
             # Set up backpropagation computation
@@ -225,17 +225,17 @@ class EmotionClassifier:
 
             tf.summary.scalar('loss', self.loss)
             tf.summary.histogram('logits', self.logits)
-            tf.summary.scalar('metrics/KL', self.kl)
-            tf.summary.scalar('metrics/Log-loss', self.log_loss)
+            tf.summary.scalar('metrics_all/KL', self.kl)
+            tf.summary.scalar('metrics_all/Log-loss', self.log_loss)
 
-            tf.summary.scalar('metrics/acc', self.acc)
-            tf.summary.scalar('metrics/MSE', self.mse)
-            tf.summary.scalar('metrics/RMSE', self.rmse)
+            tf.summary.scalar('metrics_all/acc', self.acc)
+            tf.summary.scalar('metrics_all/MSE', self.mse)
+            tf.summary.scalar('metrics_all/RMSE', self.rmse)
 
-            tf.summary.scalar('metrics/acc-op', self.acc_op)
-            tf.summary.scalar('metrics/MSE-op', self.mse_op)
-            tf.summary.scalar('metrics/RMSE-op', self.rmse_op)
-            tf.summary.scalar('metrics/mean-cosine-distance-op', self.mean_cosine_distance_op)
+            tf.summary.scalar('metrics_all/acc-op', self.acc_op)
+            tf.summary.scalar('metrics_all/MSE-op', self.mse_op)
+            tf.summary.scalar('metrics_all/RMSE-op', self.rmse_op)
+            tf.summary.scalar('metrics_all/mean-cosine-distance-op', self.mean_cosine_distance_op)
             self.summaries = tf.summary.merge_all()
 
             # Isolate the variables stored behind the scenes by the metric operation
@@ -272,6 +272,14 @@ class EmotionClassifier:
                     self.session.run(self.local_init)
                     # Grab a batch of data to feed into the placeholders in the graph.
                     _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
+
+                    # TODO [p2]: write a test for these instead of trying them here
+                    # DEBUG - does it overfit to all neutral input? Yes, passed
+                    # labels = np.repeat(np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0]]), [self.batch_size], axis=0)
+                    # DEBUG - does it overfit to a small training set? Yes, passed
+                    # _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=0)
+                    # DEBUG - What about a slightly larger dataset? almost 1/10 of data
+                    _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30)
                     feed_dict = {self.tf_x: embeddings,
                                  self.tf_y: labels,
                                  self.tf_dropout_prob: self.dropout_prob}
@@ -290,7 +298,7 @@ class EmotionClassifier:
                         # TODO [p0] add dropout for epistemic bayesian
                         # TODO [p0] add dropout for aleatoric bayesian
 
-                        # TODO [p0] reset metrics?
+                        # TODO [p2] reset metrics?
                         # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
                         # sess.run(tf.variables_initializer(stream_vars_valid))
 
@@ -387,7 +395,7 @@ def main(args):
                                            num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
                                            weight_penalty=args.weight_decay, seed=args.seed)
-    emotion_classifier.train(output_every_nth=100)
+    emotion_classifier.train(output_every_nth=args.output_every_nth)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
 
@@ -411,8 +419,10 @@ def parse_arguments(argv):
     parser.add_argument('--logs_base_dir', type=str,
                         default='/mas/u/asma_gh/uncnet/logs/',
                         help='Directory where to write event logs.')
+    parser.add_argument('--output_every_nth', type=int,
+                        help='Write to tensorboard every n batches of training.', default=100)
     parser.add_argument('--max_nrof_epochs', type=int,
-                        help='Number of epochs to run.', default=1000000)
+                        help='Number of epochs to run.', default=100000)
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)
     parser.add_argument('--hidden_layer_size', type=list,
@@ -421,14 +431,14 @@ def parse_arguments(argv):
                         help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
     parser.add_argument('--learning_rate', type=float,
                         help='Initial learning rate. If set to a negative value a learning rate ' +
-                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.1)
+                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.0001)
     parser.add_argument('--weight_decay', type=float,
                         help='L2 weight regularization.', default=0.0)
     parser.add_argument('--seed', type=int,
                         help='Random seed.', default=666)
 
 
-    # TODO [p1] need these?
+    # TODO [p2] need these?
     parser.add_argument('--pretrained_model', type=str,
                         help='Load a pretrained model before training starts.')
     parser.add_argument('--image_size', type=int,
