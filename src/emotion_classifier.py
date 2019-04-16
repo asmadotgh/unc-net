@@ -268,8 +268,6 @@ class EmotionClassifier:
             for num_epoch in range(self.num_epochs):
                 for step in range(steps_per_epoch):
                     global_step = num_epoch * steps_per_epoch + step
-                    # Resetting metrics for each batch?
-                    self.session.run(self.local_init)
                     # Grab a batch of data to feed into the placeholders in the graph.
                     _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
 
