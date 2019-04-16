@@ -9,6 +9,8 @@ import tensorflow as tf
 import argparse
 import math
 from data_loader import DataLoader
+from my_constants import Constants
+import numpy as np
 
 
 class EmotionClassifier:
@@ -162,14 +164,52 @@ class EmotionClassifier:
                 self._plus_eps(self.tf_y) * tf.log(self._plus_eps(self.class_probabilities)) + (
                             tf.ones_like(self.tf_y) - self._plus_eps(self.tf_y)) * tf.log(
                     tf.ones_like(self.class_probabilities) - self._plus_eps(self.class_probabilities)))
-            self.acc, self.acc_op = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
-            self.mse, self.mse_op = tf.metrics.mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
+
+            self.acc = tf.reduce_mean(tf.to_float(tf.equal(self.target, self.predictions)))
+            self.mse = tf.reduce_mean(tf.square(tf.subtract(tf.self.tf_y, self.class_probabilities)))
+            self.rmse = tf.sqrt(self.mse)
+
+            self.acc_, self.acc_op = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
+            self.mse_, self.mse_op = tf.metrics.mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
                                                         name='metrics')
-            self.rmse, self.rmse_op = tf.metrics.root_mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
+            self.rmse_, self.rmse_op = tf.metrics.root_mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
                                                         name='metrics')
-            self.mean_cosine_distance, self.mean_cosine_distance_op = tf.metrics.mean_cosine_distance(labels=self.tf_y,
+            self.mean_cosine_distance_, self.mean_cosine_distance_op = tf.metrics.mean_cosine_distance(labels=self.tf_y,
                                                                            predictions=self.class_probabilities, dim=1,
                                                                            name='metrics')
+
+            # TODO: debug per class metrics: num_target_labels, num_predicted_labels, acc, precision, recall, F1
+            # TODO: add AUC per class metric
+            self.num_target_labels = {}
+            self.num_predicted_labels = {}
+            self.acc_per_class = {}
+            self.precision_per_class = {}
+            self.recall_per_class= {}
+            self.f1_per_class = {}
+            self.AUC_per_class = {}
+
+            emotion_labels = Constants.get_emotion_cols()
+            for idx, emotion_label in enumerate(emotion_labels):
+                class_target = tf.to_float(tf.equal(self.target, idx))
+                class_prediction = tf.to_float(tf.equal(self.predictions, idx))
+
+                self.num_target_labels[idx] = tf.reduce_sum(class_target)
+                self.num_predicted_labels[idx] = tf.reduce_sum(class_prediction)
+                self.acc_per_class[idx] = tf.reduce_mean(tf.to_float(tf.equal(class_target, class_prediction)))
+                self.precision_per_class[idx] = tf.reduce_sum(tf.to_float(tf.equal(class_target, class_prediction)))/tf.reduce_sum(class_prediction)
+                self.recall_per_class[idx] = tf.reduce_sum(tf.to_float(tf.equal(class_target, class_prediction)))/tf.reduce_sum(class_target)
+                self.f1_per_class[idx] = 2*self.precision_per_class[idx]*self.recall_per_class[idx]/(
+                        self.precision_per_class[idx]+self.recall_per_class[idx])
+                # self.AUC_per_class[idx] = tf.constant(np.nan, shape=[1])
+
+                tf.summary.scalar(f'metrics/{emotion_label}/num_target_labels', self.num_target_labels[idx])
+                tf.summary.scalar(f'metrics/{emotion_label}/num_predicted_labels', self.num_predicted_labels[idx])
+                tf.summary.scalar(f'metrics/{emotion_label}/acc', self.acc_per_class[idx])
+                tf.summary.scalar(f'metrics/{emotion_label}/precision', self.precision_per_class[idx])
+                tf.summary.scalar(f'metrics/{emotion_label}/recall', self.recall_per_class[idx])
+                tf.summary.scalar(f'metrics/{emotion_label}/F1', self.f1_per_class[idx])
+                # tf.summary.scalar(f'metrics/{emotion_label}/AUC', self.AUC_per_class[idx])
+
 
             # Set up backpropagation computation
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -182,14 +222,20 @@ class EmotionClassifier:
                                                               self.global_step)
 
             [tf.summary.histogram("%s-grad" % g[1].name, g[0]) for g in self.gradients]
-            tf.summary.scalar('accuracy', self.acc_op)
+
             tf.summary.scalar('loss', self.loss)
             tf.summary.histogram('logits', self.logits)
-            tf.summary.scalar('distance_metrics/KL', self.kl)
-            tf.summary.scalar('distance_metrics/Log-loss', self.log_loss)
-            tf.summary.scalar('distance_metrics/MSE', self.mse_op)
-            tf.summary.scalar('distance_metrics/RMSE', self.rmse_op)
-            tf.summary.scalar('distance_metrics/mean-cosine-distance', self.mean_cosine_distance_op)
+            tf.summary.scalar('metrics/KL', self.kl)
+            tf.summary.scalar('metrics/Log-loss', self.log_loss)
+
+            tf.summary.scalar('metrics/acc', self.acc)
+            tf.summary.scalar('metrics/MSE', self.mse)
+            tf.summary.scalar('metrics/RMSE', self.rmse)
+
+            tf.summary.scalar('metrics/acc-op', self.acc_op)
+            tf.summary.scalar('metrics/MSE-op', self.mse_op)
+            tf.summary.scalar('metrics/RMSE-op', self.rmse_op)
+            tf.summary.scalar('metrics/mean-cosine-distance-op', self.mean_cosine_distance_op)
             self.summaries = tf.summary.merge_all()
 
             # Isolate the variables stored behind the scenes by the metric operation
@@ -249,9 +295,9 @@ class EmotionClassifier:
                         # sess.run(tf.variables_initializer(stream_vars_valid))
 
                         train_summaries, train_score, train_loss = self.session.run(
-                            [self.summaries, self.acc_op, self.loss], feed_dict)
+                            [self.summaries, self.acc, self.loss], feed_dict)
                         valid_summaries, valid_score, valid_loss = self.session.run(
-                            [self.summaries, self.acc_op, self.loss], val_feed_dict)
+                            [self.summaries, self.acc, self.loss], val_feed_dict)
 
                         self.train_summary_writer.add_summary(train_summaries, global_step=global_step)
                         self.valid_summary_writer.add_summary(valid_summaries, global_step=global_step)
@@ -311,7 +357,7 @@ class EmotionClassifier:
                      self.tf_y: y,
                      self.tf_dropout_prob: 1.0}  # no dropout during evaluation
 
-        score = self.session.run(self.acc_op, feed_dict)
+        score = self.session.run(self.acc, feed_dict)
 
         return score
 
@@ -358,7 +404,7 @@ def parse_arguments(argv):
                              'Options: VGGFace2_Inception_ResNet_v1, CASIA_WebFace_Inception_ResNet_v1')
     parser.add_argument('--embedding_layer', type=str,
                         default='Mixed_5a',
-                        help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_5a.')
+                        help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_6a, Mixed_5a.')
     parser.add_argument('--model_name', type=str,
                         help='Model name.',
                         default='FC')
