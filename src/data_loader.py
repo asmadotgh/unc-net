@@ -37,6 +37,9 @@ class DataLoader:
         np.random.shuffle(self.shuffled_train_indices)
         return
 
+    def reshuffle(self):
+        np.random.shuffle(self.shuffled_train_indices)
+
     def get_nrof_train_sampels(self):
         return len(self.train)
 
