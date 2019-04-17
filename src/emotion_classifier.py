@@ -76,9 +76,7 @@ class EmotionClassifier:
 
         # Set up and initialize tensorflow session.
         self.session = tf.Session(graph=self.graph)
-        self.session.run(self.global_init)
-        self.session.run(self.local_init)
-        # self.session.run(tf.local_variables_initializer())
+        self.session.run(self.init)
 
         # Tensorboard
         self.train_summary_writer = tf.summary.FileWriter(os.path.join(self.checkpoint_dir, 'train'), self.graph)
@@ -238,13 +236,7 @@ class EmotionClassifier:
             tf.summary.scalar('metrics_all/mean-cosine-distance-op', self.mean_cosine_distance_op)
             self.summaries = tf.summary.merge_all()
 
-            # Isolate the variables stored behind the scenes by the metric operation
-            running_vars = tf.get_collection(tf.GraphKeys.LOCAL_VARIABLES, scope="metrics")
-
-            # Define initializer to initialize/reset running variables
-            self.local_init = tf.variables_initializer(var_list=running_vars)
-
-            self.global_init = tf.global_variables_initializer()
+            self.init = tf.global_variables_initializer()
 
     def train(self, output_every_nth=None):
         """Trains using stochastic gradient descent (SGD).
@@ -268,7 +260,7 @@ class EmotionClassifier:
             for num_epoch in range(self.num_epochs):
                 self.data_loader.reshuffle()
                 for step in range(steps_per_epoch):
-                    # global_step = num_epoch * steps_per_epoch + step
+                    global_step = num_epoch * steps_per_epoch + step
                     # Grab a batch of data to feed into the placeholders in the graph.
                     _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
 
@@ -286,38 +278,41 @@ class EmotionClassifier:
 
                     # Update parameters in the direction of the gradient computed by
                     # the optimizer.
-                    _, = self.session.run([self.opt_step], feed_dict)
+                    self.session.run([self.opt_step], feed_dict)
 
-                # Evaluate model after each epoch
-                # if step % self.output_every_nth == 0:
-                # Grab all validation data.
+                    # Evaluate model every nth step
+                    if global_step % self.output_every_nth == 0:
+                        # Grab a random batch of train data.
+                        _, train_labels, train_embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size)
+                        train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
+                                           self.tf_dropout_prob: 1.0}
 
-                _, train_labels, train_embeddings = self.data_loader.get_train_batch()
-                train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels, self.tf_dropout_prob: 1.0}
+                        # Grab all validation data.
+                        _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+                        val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
+                                         self.tf_dropout_prob: 1.0}
+                        # TODO [p0] add dropout for epistemic bayesian
+                        # TODO [p0] add dropout for aleatoric bayesian
 
-                _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
-                val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels, self.tf_dropout_prob: 1.0}
-                # TODO [p0] add dropout for epistemic bayesian
-                # TODO [p0] add dropout for aleatoric bayesian
+                        # TODO [p2] reset metrics?
+                        # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
+                        # sess.run(tf.variables_initializer(stream_vars_valid))
 
-                # TODO [p2] reset metrics?
-                # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
-                # sess.run(tf.variables_initializer(stream_vars_valid))
+                        train_summaries, train_score, train_loss = self.session.run(
+                            [self.summaries, self.acc, self.loss], train_feed_dict)
+                        valid_summaries, valid_score, valid_loss = self.session.run(
+                            [self.summaries, self.acc, self.loss], val_feed_dict)
 
-                train_summaries, train_score, train_loss = self.session.run(
-                    [self.summaries, self.acc, self.loss], train_feed_dict)
-                valid_summaries, valid_score, valid_loss = self.session.run(
-                    [self.summaries, self.acc, self.loss], val_feed_dict)
+                        self.train_summary_writer.add_summary(train_summaries, global_step=num_epoch)
+                        self.valid_summary_writer.add_summary(valid_summaries, global_step=num_epoch)
 
-                self.train_summary_writer.add_summary(train_summaries, global_step=num_epoch)
-                self.valid_summary_writer.add_summary(valid_summaries, global_step=num_epoch)
+                        print(f"Epoch #{num_epoch}")
+                        print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
+                        print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
 
-                print(f"Epoch #{num_epoch}")
-                print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
-                print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
-
-                # Save a checkpoint of the model
-                self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=num_epoch)
+                        # Save a checkpoint of the model
+                        self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt',
+                                        global_step=global_step)
 
     def predict(self, x, get_probabilities=False):
         """Gets the network's predictions for some new data X
@@ -441,7 +436,7 @@ def parse_arguments(argv):
                         help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
     parser.add_argument('--learning_rate', type=float,
                         help='Initial learning rate. If set to a negative value a learning rate ' +
-                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.0001)
+                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.001)
     parser.add_argument('--weight_decay', type=float,
                         help='L2 weight regularization.', default=0.0)
     parser.add_argument('--seed', type=int,
