@@ -9,7 +9,7 @@ embedding_model_list=( $embedding_models )
 embedding_layer_list=( $embedding_layers )
 
 learning_rate_list=(0.0001 0.001 0.01 0.1 0.5)
-available_gpu_list=(1 2 3 5 6 7)
+available_gpu_list=(1 2 3 4 5 6 7)
 
 num_models=${#embedding_model_list[@]}
 num_layers=${#embedding_layer_list[@]}

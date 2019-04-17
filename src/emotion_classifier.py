@@ -266,8 +266,9 @@ class EmotionClassifier:
 
             steps_per_epoch = int(self.data_loader.get_nrof_train_sampels()/self.batch_size)
             for num_epoch in range(self.num_epochs):
+                self.data_loader.reshuffle()
                 for step in range(steps_per_epoch):
-                    global_step = num_epoch * steps_per_epoch + step
+                    # global_step = num_epoch * steps_per_epoch + step
                     # Grab a batch of data to feed into the placeholders in the graph.
                     _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
 
@@ -287,35 +288,36 @@ class EmotionClassifier:
                     # the optimizer.
                     _, = self.session.run([self.opt_step], feed_dict)
 
-                    # Output/save the training and validation performance every few steps.
-                    if step % self.output_every_nth == 0:
-                        # Grab a batch of validation data too.
-                        _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch(self.batch_size)
-                        val_feed_dict = {self.tf_x: valid_embeddings,
-                                         self.tf_y: valid_labels,
-                                         self.tf_dropout_prob: 1.0}
-                        # TODO [p0] add dropout for epistemic bayesian
-                        # TODO [p0] add dropout for aleatoric bayesian
+                # Evaluate model after each epoch
+                # if step % self.output_every_nth == 0:
+                # Grab all validation data.
 
-                        # TODO [p2] reset metrics?
-                        # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
-                        # sess.run(tf.variables_initializer(stream_vars_valid))
+                _, train_labels, train_embeddings = self.data_loader.get_train_batch()
+                train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels, self.tf_dropout_prob: 1.0}
 
-                        train_summaries, train_score, train_loss = self.session.run(
-                            [self.summaries, self.acc, self.loss], feed_dict)
-                        valid_summaries, valid_score, valid_loss = self.session.run(
-                            [self.summaries, self.acc, self.loss], val_feed_dict)
+                _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+                val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels, self.tf_dropout_prob: 1.0}
+                # TODO [p0] add dropout for epistemic bayesian
+                # TODO [p0] add dropout for aleatoric bayesian
 
-                        self.train_summary_writer.add_summary(train_summaries, global_step=global_step)
-                        self.valid_summary_writer.add_summary(valid_summaries, global_step=global_step)
+                # TODO [p2] reset metrics?
+                # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
+                # sess.run(tf.variables_initializer(stream_vars_valid))
 
-                        print(f"Epoch #{num_epoch}, Training iteration {step}")
-                        print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
-                        print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
+                train_summaries, train_score, train_loss = self.session.run(
+                    [self.summaries, self.acc, self.loss], train_feed_dict)
+                valid_summaries, valid_score, valid_loss = self.session.run(
+                    [self.summaries, self.acc, self.loss], val_feed_dict)
 
-                        # Save a checkpoint of the model
-                        self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt',
-                                        global_step=global_step)
+                self.train_summary_writer.add_summary(train_summaries, global_step=num_epoch)
+                self.valid_summary_writer.add_summary(valid_summaries, global_step=num_epoch)
+
+                print(f"Epoch #{num_epoch}")
+                print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
+                print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
+
+                # Save a checkpoint of the model
+                self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt', global_step=num_epoch)
 
     def predict(self, x, get_probabilities=False):
         """Gets the network's predictions for some new data X
