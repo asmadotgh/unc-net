@@ -64,6 +64,7 @@ class EmotionClassifier:
 
         # Extract the data from the filename
         self.seed = seed
+        # import pdb; pdb.set_trace()
         self.data_loader = DataLoader(filename, import_embedding=True, embedding_model=self.embedding_model,
                                       embedding_layer=self.embedding_layer, seed=self.seed)
         self.input_size = self.data_loader.get_embedding_size()
@@ -167,15 +168,6 @@ class EmotionClassifier:
             self.mse = tf.reduce_mean(tf.square(tf.subtract(self.tf_y, self.class_probabilities)))
             self.rmse = tf.sqrt(self.mse)
 
-            self.acc_, self.acc_op = tf.metrics.accuracy(labels=self.target, predictions=self.predictions, name='metrics')
-            self.mse_, self.mse_op = tf.metrics.mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
-                                                        name='metrics')
-            self.rmse_, self.rmse_op = tf.metrics.root_mean_squared_error(labels=self.tf_y, predictions=self.class_probabilities,
-                                                        name='metrics')
-            self.mean_cosine_distance_, self.mean_cosine_distance_op = tf.metrics.mean_cosine_distance(labels=self.tf_y,
-                                                                           predictions=self.class_probabilities, dim=1,
-                                                                           name='metrics')
-
             # TODO: debug per class metrics: num_target_labels, num_predicted_labels, acc, precision, recall, F1
             # TODO: add AUC per class metric
             self.num_target_labels = {}
@@ -229,11 +221,6 @@ class EmotionClassifier:
             tf.summary.scalar('metrics_all/acc', self.acc)
             tf.summary.scalar('metrics_all/MSE', self.mse)
             tf.summary.scalar('metrics_all/RMSE', self.rmse)
-
-            tf.summary.scalar('metrics_all/acc-op', self.acc_op)
-            tf.summary.scalar('metrics_all/MSE-op', self.mse_op)
-            tf.summary.scalar('metrics_all/RMSE-op', self.rmse_op)
-            tf.summary.scalar('metrics_all/mean-cosine-distance-op', self.mean_cosine_distance_op)
             self.summaries = tf.summary.merge_all()
 
             self.init = tf.global_variables_initializer()
@@ -262,15 +249,15 @@ class EmotionClassifier:
                 for step in range(steps_per_epoch):
                     global_step = num_epoch * steps_per_epoch + step
                     # Grab a batch of data to feed into the placeholders in the graph.
-                    _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
+                    labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step)
 
                     # TODO [p2]: write a test for these instead of trying them here
                     # DEBUG - does it overfit to all neutral input? Yes, passed
                     # labels = np.repeat(np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0]]), [self.batch_size], axis=0)
                     # DEBUG - does it overfit to a small training set? Yes, passed
-                    # _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=0)
+                    # labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=0)
                     # DEBUG - What about a slightly larger dataset (almost 1/10 of data)? Yes, Pass
-                    # _, labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30)
+                    # labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30)
 
                     feed_dict = {self.tf_x: embeddings,
                                  self.tf_y: labels,
@@ -283,12 +270,12 @@ class EmotionClassifier:
                     # Evaluate model every nth step
                     if global_step % self.output_every_nth == 0:
                         # Grab a random batch of train data.
-                        _, train_labels, train_embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size)
+                        train_labels, train_embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size)
                         train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
                                            self.tf_dropout_prob: 1.0}
 
                         # Grab all validation data.
-                        _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+                        valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
                         val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
                                          self.tf_dropout_prob: 1.0}
                         # TODO [p0] add dropout for epistemic bayesian
@@ -306,7 +293,7 @@ class EmotionClassifier:
                         self.train_summary_writer.add_summary(train_summaries, global_step=num_epoch)
                         self.valid_summary_writer.add_summary(valid_summaries, global_step=num_epoch)
 
-                        print(f"Epoch #{num_epoch}")
+                        print(f"Epoch #: {num_epoch}, training step: {step}, global step: {global_step}")
                         print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
                         print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
 
@@ -341,7 +328,7 @@ class EmotionClassifier:
 
     def test_on_validation(self):
         """Returns performance on the model's validation set."""
-        _, valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+        valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
         score = self.get_performance_on_data(valid_embeddings,
                                              valid_labels)
         print(f"Final {self.metric_name} on validation data is: {score}")
@@ -349,7 +336,7 @@ class EmotionClassifier:
 
     def test_on_test(self):
         """Returns performance on the model's test set."""
-        _, test_labels, test_embeddings = self.data_loader.get_test_batch()
+        test_labels, test_embeddings = self.data_loader.get_test_batch()
         score = self.get_performance_on_data(test_embeddings,
                                              test_labels)
         print(f"Final {self.metric_name} on test data is: {score}")
@@ -425,7 +412,7 @@ def parse_arguments(argv):
                         default='/mas/u/asma_gh/uncnet/logs/',
                         help='Directory where to write event logs.')
     parser.add_argument('--output_every_nth', type=int,
-                        help='Write to tensorboard every n batches of training.', default=100)
+                        help='Write to tensorboard every n batches of training.', default=1000)
     parser.add_argument('--max_nrof_epochs', type=int,
                         help='Number of epochs to run.', default=100000)
     parser.add_argument('--batch_size', type=int,

@@ -35,7 +35,17 @@ class DataLoader:
         self.nrof_samples = len(self.dataset)
         self.shuffled_train_indices = self.train.index.to_list()
         np.random.shuffle(self.shuffled_train_indices)
-        return
+
+        # Saving numpy arrays for images and labels
+        self.labels = np.zeros((self.nrof_samples, len(Constants.get_emotion_cols())))
+        for idx in range(self.nrof_samples):
+            if (idx % 100 == 0):
+                print(f'\033[1A\033[KConverting row {idx} of dataframe to numpy array.')
+            # Getting labels
+            inp_labels = self.dataset.iloc[idx][Constants.get_emotion_cols()]
+            n_annotations = sum(inp_labels)
+            probs_labels = [float(i) for i in inp_labels] / n_annotations
+            self.labels[idx, :] = probs_labels
 
     def reshuffle(self):
         np.random.shuffle(self.shuffled_train_indices)
@@ -123,6 +133,7 @@ class DataLoader:
             os.makedirs(dataset_dir)
         img.save(os.path.join(dataset_dir, img_name))
 
+    # TODO this part is NON-OPTIMAL. MOVE THIS TO INIT AND ONLY USE INDICES
     def load_data(self, indices=None, do_random_crop=False, do_random_flip=False, save_images=False):
         if indices is None:
             indices = range(self.nrof_samples)
@@ -158,6 +169,17 @@ class DataLoader:
             embeddings = None
         return images, labels, embeddings
 
+
+    def load_data_np(self, indices=None):
+        if indices is None:
+            indices = range(self.nrof_samples)
+        # Getting previously processed embeddings
+        if self.import_embedding:
+            embeddings = self.embeddings[indices]
+        else:
+            embeddings = None
+        return self.labels[indices, :], embeddings
+
     def load_model(self, model, input_map=None):
         # Check if the model is a model directory (containing a metagraph and a checkpoint file)
         #  or if it is a protobuf file with a frozen graph
@@ -181,30 +203,33 @@ class DataLoader:
     def get_train_batch(self, batch_size=None, idx=None):
         if idx is None:
             if batch_size is None:
-                batch_size = len(self.train)
-            indices = np.random.choice(self.train.index, size=batch_size)
-            images, labels, embeddings = self.load_data(indices=indices)
+                indices = self.train.index
+            else:
+                indices = np.random.choice(self.train.index, size=batch_size)
+            labels, embeddings = self.load_data_np(indices=indices)
         else:
             if ((idx + 1) * batch_size) > len(self.train):
                 print('batch number exceeds train size.')
-                return None, None, None
+                return None, None
             indices = self.shuffled_train_indices[idx * batch_size:(idx + 1) * batch_size]
-            images, labels, embeddings = self.load_data(indices=indices)
-        return images, labels, embeddings
+            labels, embeddings = self.load_data_np(indices=indices)
+        return labels, embeddings
 
     def get_valid_batch(self, batch_size=None):
         if batch_size is None:
-            batch_size = len(self.valid)
-        indices = np.random.choice(self.valid.index, size=batch_size)
-        images, labels, embeddings = self.load_data(indices=indices)
-        return images, labels, embeddings
+            indices = self.valid.index
+        else:
+            indices = np.random.choice(self.valid.index, size=batch_size)
+        labels, embeddings = self.load_data_np(indices=indices)
+        return labels, embeddings
 
     def get_test_batch(self, batch_size=None):
         if batch_size is None:
-            batch_size = len(self.test)
-        indices = np.random.choice(self.test.index, size=batch_size)
-        images, labels, embeddings = self.load_data(indices=indices)
-        return images, labels, embeddings
+            indices = self.test.index
+        else:
+            indices = np.random.choice(self.test.index, size=batch_size)
+        labels, embeddings = self.load_data_np(indices=indices)
+        return labels, embeddings
 
 
 if __name__ == '__main__':
