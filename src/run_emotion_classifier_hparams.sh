@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-#embedding_models='VGGFace2_Inception_ResNet_v1 CASIA_WebFace_Inception_ResNet_v1'
-#embedding_layers='Mixed_8b Mixed_8a Mixed_7a Mixed_6b Mixed_6a Mixed_5a'
-embedding_models='VGGFace2_Inception_ResNet_v1'
-embedding_layers='Mixed_5a'
+embedding_models='VGGFace2_Inception_ResNet_v1 CASIA_WebFace_Inception_ResNet_v1'
+embedding_layers='Mixed_8b Mixed_8a Mixed_7a Mixed_6b Mixed_6a Mixed_5a'
+#embedding_models='VGGFace2_Inception_ResNet_v1'
+#embedding_layers='Mixed_5a'
 
 embedding_model_list=( $embedding_models )
 embedding_layer_list=( $embedding_layers )
 
-learning_rate_list=(0.0001 0.001 0.01 0.1 0.5)
+learning_rate_list=(0.0001 0.001 0.01 0.1)
 available_gpu_list=(1 2 3 4 5 6 7)
 
 num_models=${#embedding_model_list[@]}
