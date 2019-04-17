@@ -269,10 +269,10 @@ class EmotionClassifier:
 
                     # Evaluate model every nth step
                     if global_step % self.output_every_nth == 0:
-                        # Grab a random batch of train data.
-                        train_labels, train_embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size)
-                        train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
-                                           self.tf_dropout_prob: 1.0}
+                        # Grab another random batch of train data.
+                        # train_labels, train_embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size)
+                        # train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
+                        #                    self.tf_dropout_prob: 1.0}
 
                         # Grab all validation data.
                         valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
@@ -286,12 +286,12 @@ class EmotionClassifier:
                         # sess.run(tf.variables_initializer(stream_vars_valid))
 
                         train_summaries, train_score, train_loss = self.session.run(
-                            [self.summaries, self.acc, self.loss], train_feed_dict)
+                            [self.summaries, self.acc, self.loss], feed_dict)
                         valid_summaries, valid_score, valid_loss = self.session.run(
                             [self.summaries, self.acc, self.loss], val_feed_dict)
 
-                        self.train_summary_writer.add_summary(train_summaries, global_step=num_epoch)
-                        self.valid_summary_writer.add_summary(valid_summaries, global_step=num_epoch)
+                        self.train_summary_writer.add_summary(train_summaries, global_step=global_step)
+                        self.valid_summary_writer.add_summary(valid_summaries, global_step=global_step)
 
                         print(f"Epoch #: {num_epoch}, training step: {step}, global step: {global_step}")
                         print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
