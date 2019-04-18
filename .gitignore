@@ -2,7 +2,9 @@ models
 datasets
 pretrained_models
 logs
+legacy_logs
 ./models
+*.DS_Store
 
 led / optimized / DLL files
 __pycache__/
