@@ -69,16 +69,16 @@ def parse_arguments(argv):
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data_dir', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FER+/train.csv',
+                        default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
                         help='Path to the data directory containing faces/labels.')
     parser.add_argument('--embedding_dir', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/embedding/',
                         help='Path to the embedding pkl file.')
     parser.add_argument('--embedding_name', type=str,
-                        default='Mixed_5a',
+                        default='Mixed_7a',
                         help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_6a, Mixed_5a.')
     parser.add_argument('--model', type=str,
-                        default='/mas/u/asma_gh/uncnet/pretrained_models/VGGFace2_Inception_ResNet_v1', #CASIA_WebFace_Inception_ResNet_v1
+                        default='/mas/u/asma_gh/uncnet/pretrained_models/CASIA_WebFace_Inception_ResNet_v1', #VGGFace2_Inception_ResNet_v1
                         help='Could be either a directory containing the meta_file and ckpt_file or a model protobuf (.pb) file')
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)

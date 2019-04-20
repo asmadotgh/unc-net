@@ -16,7 +16,8 @@ import numpy as np
 class EmotionClassifier:
     def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
                  layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
-                 weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666):
+                 weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666,
+                 uncertainty_type='none'):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
         and building the graph.
@@ -48,6 +49,7 @@ class EmotionClassifier:
         self.output_every_nth = 10
         self.embedding_model = embedding_model
         self.embedding_layer = embedding_layer
+        self.uncertainty_type = uncertainty_type
 
         # Hyperparameters that should be tuned
         self.layer_sizes = layer_sizes
@@ -113,6 +115,11 @@ class EmotionClassifier:
 
         print(f"Making a fully connected net with the following structure: {sizes}")
 
+    @staticmethod
+    def categorical_cross_entropy(pred, true):
+        # return np.sum(true * np.log(pred), axis=1)
+        return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=pred, labels=true))
+
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
         that will be trained."""
@@ -148,7 +155,9 @@ class EmotionClassifier:
 
             # Apply a softmax function to get probabilities, train this dist against targets with
             # cross entropy loss.
-            self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.logits, labels=self.tf_y))
+            # self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.logits, labels=self.tf_y))
+            if self.uncertainty_type == 'none':
+                self.loss = self.categorical_cross_entropy(pred=self.logits, true=self.tf_y)
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -386,10 +395,15 @@ def main(args):
                                            batch_size=args.batch_size,
                                            num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
-                                           weight_penalty=args.weight_decay, seed=args.seed)
+                                           weight_penalty=args.weight_decay, seed=args.seed,
+                                           uncertainty_type=args.uncertainty_type)
     emotion_classifier.train(output_every_nth=args.output_every_nth)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
+
+# use this for debugging purposes
+# note that this is ONLY FOR TESTING FUNCTIONALITY, the embedding and file numbers are not mapped.
+# python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/'
 
 
 def parse_arguments(argv):
@@ -398,12 +412,15 @@ def parse_arguments(argv):
     parser.add_argument('--file_path', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
                         help='Path to the data file containing aligned faces/labels.')
+    parser.add_argument('--uncertainty_type', type=str,
+                        default='none',
+                        help='Which uncertainties to model? Options: none, aleatoric, epistemic, both.')
     parser.add_argument('--embedding_model', type=str,
-                        default='VGGFace2_Inception_ResNet_v1',
+                        default='CASIA_WebFace_Inception_ResNet_v1',
                         help='The pre-trained model to use for exporting embedding. '
                              'Options: VGGFace2_Inception_ResNet_v1, CASIA_WebFace_Inception_ResNet_v1')
     parser.add_argument('--embedding_layer', type=str,
-                        default='Mixed_5a',
+                        default='Mixed_7a',
                         help='Name of the embedding layer. Options: Mixed_8b, Mixed_8a, Mixed_7a, Mixed_6b, Mixed_6a, Mixed_5a.')
     parser.add_argument('--model_name', type=str,
                         help='Model name.',
@@ -423,7 +440,7 @@ def parse_arguments(argv):
                         help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
     parser.add_argument('--learning_rate', type=float,
                         help='Initial learning rate. If set to a negative value a learning rate ' +
-                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.001)
+                             'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.0001)
     parser.add_argument('--weight_decay', type=float,
                         help='L2 weight regularization.', default=0.0)
     parser.add_argument('--seed', type=int,
