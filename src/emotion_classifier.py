@@ -11,6 +11,7 @@ import math
 from data_loader import DataLoader
 from my_constants import Constants
 import numpy as np
+import scipy
 
 
 class EmotionClassifier:
@@ -433,23 +434,25 @@ class EmotionClassifier:
     def get_performance_on_data(self, x, y):
         aleatoric_u = None
         epistemic_u = None
+
         def mc_epistemic_sampling():
             mc_logits = []
             mc_losses = []
             for i in range(self.n_epistemic):
-                losses, logits = self.session.run([self.loss, self.logits], feed_dict={
+                loss, logits = self.session.run([self.loss, self.logits], feed_dict={
                     self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: self.dropout_prob})
                 mc_logits.append(logits)
                 mc_losses.append(loss)
-            mean_logits = np.mean(mc_logits, axis=1)
+            mean_logits = np.mean(mc_logits, axis=0)
             score = calc_acc(mean_logits, y)
-            return mc_logits, np.mean(losses), score
+            epistemic_u = np.var(mc_logits, axis=(0,2))
+            return mc_logits, np.mean(mc_losses), score, epistemic_u
 
         def calc_acc(logits, y):
-            class_probabilities = np.softmax(logits)
+            class_probabilities = scipy.special.softmax(logits)
             predictions = np.argmax(class_probabilities, axis=1)
             target = np.argmax(y, axis=1)
-            acc = np.mean(np.equal(target, predictions), axis=1)
+            acc = np.mean(np.equal(target, predictions))
             return acc
 
         """Returns the model's performance on input data X and targets Y."""
@@ -460,13 +463,11 @@ class EmotionClassifier:
             loss, score, logits, aleatoric_u = self.session.run([self.loss, self.acc, self.logits_mean, self.logits_var], feed_dict={
                 self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: 1.0})
         elif self.uncertainty_type == 'epistemic':
-            mc_logits, loss, score = mc_epistemic_sampling()
-            epistemic_u = np.var(mc_logits)
+            mc_logits, loss, score, epistemic_u = mc_epistemic_sampling()
         elif self.uncertainty_type == 'both':
             aleatoric_u = self.session.run(self.logits_var, feed_dict={
                 self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: 1.0})
-            mc_logits, loss, score = mc_epistemic_sampling()
-            epistemic_u = np.var(mc_logits)
+            mc_logits, loss, score, epistemic_u = mc_epistemic_sampling()
 
         return loss, score, aleatoric_u, epistemic_u
 
