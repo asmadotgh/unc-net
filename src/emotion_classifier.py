@@ -17,7 +17,7 @@ class EmotionClassifier:
     def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
                  layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
                  weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666,
-                 uncertainty_type='none'):
+                 uncertainty_type='none', n_aleatoric=None, n_epistemic=None):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
         and building the graph.
@@ -46,10 +46,11 @@ class EmotionClassifier:
         self.checkpoint_dir = checkpoint_dir
         self.filename = filename
         self.model_name = model_name
-        self.output_every_nth = 10
         self.embedding_model = embedding_model
         self.embedding_layer = embedding_layer
         self.uncertainty_type = uncertainty_type
+        self.n_aleatoric = n_aleatoric
+        self.n_epistemic = n_epistemic
 
         # Hyperparameters that should be tuned
         self.layer_sizes = layer_sizes
@@ -57,6 +58,10 @@ class EmotionClassifier:
         self.num_epochs = num_epochs
         self.learning_rate = learning_rate
         self.dropout_prob = dropout_prob
+        if self.uncertainty_type == 'none' or self.uncertainty_type == 'aleatoric':
+            self.eval_dropout_prob = 1.0
+        elif self.uncertainty_type == 'epistemic' or self.uncertainty_type == 'both':
+            self.eval_dropout_prob = dropout_prob
         self.weight_penalty = weight_penalty
 
         # Hyperparameters that could be tuned
@@ -66,7 +71,6 @@ class EmotionClassifier:
 
         # Extract the data from the filename
         self.seed = seed
-        # import pdb; pdb.set_trace()
         self.data_loader = DataLoader(filename, import_embedding=True, embedding_model=self.embedding_model,
                                       embedding_layer=self.embedding_layer, seed=self.seed)
         self.input_size = self.data_loader.get_embedding_size()
@@ -102,7 +106,13 @@ class EmotionClassifier:
                 input_len = self.layer_sizes[i - 1]
 
             if i == len(self.layer_sizes):
-                output_len = self.output_size
+                if self.uncertainty_type == 'none' or self.uncertainty_type == 'epistemic':
+                    output_len = self.output_size
+                elif self.uncertainty_type == 'aleatoric' or self.uncertainty_type == 'both':
+                    output_len = self.output_size + 1
+                else:
+                    print('ERROR! Unknown uncertainty type.')
+
             else:
                 output_len = self.layer_sizes[i]
 
@@ -116,9 +126,58 @@ class EmotionClassifier:
         print(f"Making a fully connected net with the following structure: {sizes}")
 
     @staticmethod
-    def categorical_cross_entropy(pred, true):
-        # return np.sum(true * np.log(pred), axis=1)
-        return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=pred, labels=true))
+    def categorical_cross_entropy(true, pred):
+        # standard categorical cross entropy
+        # N data points, C classes
+        # true - true values. Shape: (N, C)
+        # pred - predicted values. Shape: (N, C)
+        # returns - loss (N)
+        return tf.nn.softmax_cross_entropy_with_logits_v2(labels=true, logits=pred)
+
+    # TODO complete this
+    @staticmethod
+    def gaussian_categorical_crossentropy(true, pred, dist, num_classes):
+        # for a single monte carlo simulation,
+        #   calculate categorical_crossentropy of
+        #   predicted logit values plus gaussian
+        #   noise vs true values.
+        # true - true values. Shape: (N, C)
+        # pred - predicted logit values. Shape: (N, C)
+        # dist - normal distribution to sample from. Shape: (N, C)
+        # num_classes - the number of classes. C
+        # returns - distorted loss (N,)
+        def map_fn(i):
+            std_samples = tf.transpose(dist.sample(num_classes))
+            distorted_loss = EmotionClassifier.categorical_cross_entropy(true, pred + std_samples)
+            return distorted_loss
+
+        return map_fn
+
+    # TODO complete this
+    @staticmethod
+    def bayesian_categorical_crossentropy(T, num_classes, true, pred_mean_log_var):
+        # Bayesian categorical cross entropy.
+        # N data points, C classes, T monte carlo simulations
+        # true - true values. Shape: (N, C)
+        # pred_mean_log_var - predicted logit values and log variance. Shape: (N, C + 1)
+        # returns - loss (N,)
+
+        # shape: (N,)
+        std = tf.exp(0.5 * pred_mean_log_var[:, num_classes])
+        # shape: (N, C)
+        pred = pred_mean_log_var[:, 0:num_classes]
+        # shape: (T,)
+        iterable = tf.Variable(np.ones(T), trainable=False, dtype=tf.float32)
+        dist = tf.distributions.Normal(loc=tf.zeros_like(std), scale=std)
+        # shape: (T, N)
+        monte_carlo_results = tf.map_fn(
+            EmotionClassifier.gaussian_categorical_crossentropy(true, pred, dist, num_classes),
+            iterable, name='monte_carlo_results')
+        # shape: (N,)
+        new_loss = tf.reduce_mean(monte_carlo_results, axis=0)
+
+        return new_loss
+
 
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
@@ -148,16 +207,25 @@ class EmotionClassifier:
                             hidden = tf.nn.dropout(hidden, self.tf_dropout_prob)
                 return hidden
 
-            self.run_network = run_network
 
-            # Compute the loss function
-            self.logits = run_network(self.tf_x)
 
             # Apply a softmax function to get probabilities, train this dist against targets with
             # cross entropy loss.
-            # self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.logits, labels=self.tf_y))
-            if self.uncertainty_type == 'none':
-                self.loss = self.categorical_cross_entropy(pred=self.logits, true=self.tf_y)
+            if self.uncertainty_type == 'none' or self.uncertainty_type == 'epistemic':
+                # Compute the loss function
+                self.logits = run_network(self.tf_x)
+                self.loss = tf.reduce_mean(self.categorical_cross_entropy(true=self.tf_y, pred=self.logits))
+            elif self.uncertainty_type == 'aleatoric' or self.uncertainty_type == 'both':
+                # Compute the loss function
+                self.logits_mean_log_var = run_network(self.tf_x)
+                self.logits_mean = self.logits_mean_log_var[:, :self.output_size]
+                self.logits_var = tf.exp(self.logits_mean_log_var[:, self.output_size])
+                self.loss = tf.reduce_mean(self.bayesian_categorical_crossentropy(
+                    T=self.n_aleatoric, num_classes=Constants.get_no_emotions(),
+                    pred_mean_log_var=self.logits_mean_log_var, true=self.tf_y))
+                self.logits = self.logits_mean
+            else:
+                print('ERROR! Unknown uncertainty type. Valid options: none, aleatoric, epistemic, both.')
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
@@ -209,7 +277,6 @@ class EmotionClassifier:
                 tf.summary.scalar(f'metrics_{emotion_label}/F1', self.f1_per_class[idx])
                 # tf.summary.scalar(f'metrics_{emotion_label}/AUC', self.AUC_per_class[idx])
 
-
             # Set up backpropagation computation
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
             self.params = tf.trainable_variables()
@@ -219,6 +286,7 @@ class EmotionClassifier:
             self.tf_optimizer = self.optimizer(self.learning_rate)
             self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.params),
                                                               self.global_step)
+
 
             [tf.summary.histogram("%s-grad" % g[1].name, g[0]) for g in self.gradients]
 
@@ -275,6 +343,12 @@ class EmotionClassifier:
                     # Update parameters in the direction of the gradient computed by
                     # the optimizer.
                     self.session.run([self.opt_step], feed_dict)
+                    # train_loss, grads, logits_mean_var, _ = self.session.run([self.loss, self.gradients, self.logits_mean_var, self.opt_step], feed_dict)
+                    # grads_nan = sum([sum(i) for i in [np.isnan(g.flatten()) for g in grads]])
+                    # logits_nan = sum(sum(np.isnan(logits_mean_var)))
+                    # print (f'train loss: {train_loss}')
+                    # print(f'gradients has nan? {grads_nan}')
+                    # print(f'logits has nan? {logits_nan}')
 
                     # Evaluate model every nth step
                     if global_step % self.output_every_nth == 0:
@@ -283,16 +357,13 @@ class EmotionClassifier:
                         # train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
                         #                    self.tf_dropout_prob: 1.0}
 
+                        self.test_on_validation()
+
+                        # TODO: remove below, just print validation summaries to tensorboard
                         # Grab all validation data.
                         valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
                         val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
-                                         self.tf_dropout_prob: 1.0}
-                        # TODO [p0] add dropout for epistemic bayesian
-                        # TODO [p0] add dropout for aleatoric bayesian
-
-                        # TODO [p2] reset metrics?
-                        # stream_vars_valid = [v for v in tf.local_variables() if 'valid/' in v.name]
-                        # sess.run(tf.variables_initializer(stream_vars_valid))
+                                         self.tf_dropout_prob: self.eval_dropout_prob}
 
                         train_summaries, train_score, train_loss = self.session.run(
                             [self.summaries, self.acc, self.loss], feed_dict)
@@ -338,28 +409,66 @@ class EmotionClassifier:
     def test_on_validation(self):
         """Returns performance on the model's validation set."""
         valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
-        score = self.get_performance_on_data(valid_embeddings,
+        loss, score, aleatoric_u, epistemic_u = self.get_performance_on_data(valid_embeddings,
                                              valid_labels)
-        print(f"Final {self.metric_name} on validation data is: {score}")
-        return score
+        print(f"Valid data loss: {loss}")
+        print(f"Final {self.metric_name} on valid data is: {score}")
+        if self.uncertainty_type == 'aleatoric' or self.uncertainty_type == 'both':
+            print(f"Final aleatoric uncertainty on valid data is: {aleatoric_u}")
+        if self.uncertainty_type == 'epistemic' or self.uncertainty_type == 'both':
+            print(f"Final epistemic uncertainty on valid data is: {epistemic_u}")
 
     def test_on_test(self):
         """Returns performance on the model's test set."""
         test_labels, test_embeddings = self.data_loader.get_test_batch()
-        score = self.get_performance_on_data(test_embeddings,
+        loss, score, aleatoric_u, epistemic_u = self.get_performance_on_data(test_embeddings,
                                              test_labels)
+        print(f"Test data loss: {loss}")
         print(f"Final {self.metric_name} on test data is: {score}")
-        return score
+        if self.uncertainty_type == 'aleatoric' or self.uncertainty_type == 'both':
+            print(f"Final aleatoric uncertainty on test data is: {aleatoric_u}")
+        if self.uncertainty_type == 'epistemic' or self.uncertainty_type == 'both':
+            print(f"Final epistemic uncertainty on test data is: {epistemic_u}")
 
     def get_performance_on_data(self, x, y):
+        aleatoric_u = None
+        epistemic_u = None
+        def mc_epistemic_sampling():
+            mc_logits = []
+            mc_losses = []
+            for i in range(self.n_epistemic):
+                losses, logits = self.session.run([self.loss, self.logits], feed_dict={
+                    self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: self.dropout_prob})
+                mc_logits.append(logits)
+                mc_losses.append(loss)
+            mean_logits = np.mean(mc_logits, axis=1)
+            score = calc_acc(mean_logits, y)
+            return mc_logits, np.mean(losses), score
+
+        def calc_acc(logits, y):
+            class_probabilities = np.softmax(logits)
+            predictions = np.argmax(class_probabilities, axis=1)
+            target = np.argmax(y, axis=1)
+            acc = np.mean(np.equal(target, predictions), axis=1)
+            return acc
+
         """Returns the model's performance on input data X and targets Y."""
-        feed_dict = {self.tf_x: x,
-                     self.tf_y: y,
-                     self.tf_dropout_prob: 1.0}  # no dropout during evaluation
+        if self.uncertainty_type == 'none':
+            loss, score, logits = self.session.run([self.loss, self.acc, self.logits], feed_dict={
+                self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: 1.0})
+        elif self.uncertainty_type == 'aleatoric':
+            loss, score, logits, aleatoric_u = self.session.run([self.loss, self.acc, self.logits_mean, self.logits_var], feed_dict={
+                self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: 1.0})
+        elif self.uncertainty_type == 'epistemic':
+            mc_logits, loss, score = mc_epistemic_sampling()
+            epistemic_u = np.var(mc_logits)
+        elif self.uncertainty_type == 'both':
+            aleatoric_u = self.session.run(self.logits_var, feed_dict={
+                self.tf_x: x, self.tf_y: y, self.tf_dropout_prob: 1.0})
+            mc_logits, loss, score = mc_epistemic_sampling()
+            epistemic_u = np.var(mc_logits)
 
-        score = self.session.run(self.acc, feed_dict)
-
-        return score
+        return loss, score, aleatoric_u, epistemic_u
 
 
 def weight_variable(shape, name):
@@ -396,14 +505,14 @@ def main(args):
                                            num_epochs=args.max_nrof_epochs, layer_sizes=args.hidden_layer_size,
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
                                            weight_penalty=args.weight_decay, seed=args.seed,
-                                           uncertainty_type=args.uncertainty_type)
+                                           uncertainty_type=args.uncertainty_type, n_aleatoric=args.n_aleatoric,
+                                           n_epistemic=args.n_epistemic)
     emotion_classifier.train(output_every_nth=args.output_every_nth)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
 
 # use this for debugging purposes
-# note that this is ONLY FOR TESTING FUNCTIONALITY, the embedding and file numbers are not mapped.
-# python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/'
+# CUDA_VISIBLE_DEVICES=1 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --uncertainty_type='aleatoric' --batch_size=10
 
 
 def parse_arguments(argv):
@@ -415,6 +524,10 @@ def parse_arguments(argv):
     parser.add_argument('--uncertainty_type', type=str,
                         default='none',
                         help='Which uncertainties to model? Options: none, aleatoric, epistemic, both.')
+    parser.add_argument('--n_aleatoric', type=int,
+                        help='Number of monte carlo samples for aleatoric uncertainty.', default=10)
+    parser.add_argument('--n_epistemic', type=int,
+                        help='Number of monte carlo samples for epistemic uncertainty.', default=10)
     parser.add_argument('--embedding_model', type=str,
                         default='CASIA_WebFace_Inception_ResNet_v1',
                         help='The pre-trained model to use for exporting embedding. '
@@ -437,7 +550,7 @@ def parse_arguments(argv):
     parser.add_argument('--hidden_layer_size', type=list,
                         help='Dimensionality of FC layers.', default=[128, 128])
     parser.add_argument('--keep_probability', type=float,
-                        help='Keep probability of dropout for the fully connected layer(s).', default=1.0)
+                        help='Keep probability of dropout for the fully connected layer(s).', default=0.8)
     parser.add_argument('--learning_rate', type=float,
                         help='Initial learning rate. If set to a negative value a learning rate ' +
                              'schedule can be specified in the file "learning_rate_schedule.txt"', default=0.0001)
