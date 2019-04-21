@@ -543,7 +543,7 @@ def parse_arguments(argv):
     parser.add_argument('--output_every_nth', type=int,
                         help='Write to tensorboard every n batches of training.', default=1000)
     parser.add_argument('--max_nrof_epochs', type=int,
-                        help='Number of epochs to run.', default=10)     # 3 is fine
+                        help='Number of epochs to run.', default=100000)
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)
     parser.add_argument('--hidden_layer_size', type=list,
