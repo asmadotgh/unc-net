@@ -3,6 +3,7 @@ datasets
 pretrained_models
 logs
 legacy_logs
+unc_logs
 ./models
 *.DS_Store
 

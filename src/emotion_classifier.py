@@ -135,7 +135,6 @@ class EmotionClassifier:
         # returns - loss (N)
         return tf.nn.softmax_cross_entropy_with_logits_v2(labels=true, logits=pred)
 
-    # TODO complete this
     @staticmethod
     def gaussian_categorical_crossentropy(true, pred, dist, num_classes):
         # for a single monte carlo simulation,
@@ -154,7 +153,6 @@ class EmotionClassifier:
 
         return map_fn
 
-    # TODO complete this
     @staticmethod
     def bayesian_categorical_crossentropy(T, num_classes, true, pred_mean_log_var):
         # Bayesian categorical cross entropy.
@@ -246,8 +244,7 @@ class EmotionClassifier:
             self.mse = tf.reduce_mean(tf.square(tf.subtract(self.tf_y, self.class_probabilities)))
             self.rmse = tf.sqrt(self.mse)
 
-            # TODO: debug per class metrics: num_target_labels, num_predicted_labels, acc, precision, recall, F1
-            # TODO: add AUC per class metric
+            # TODO [p1]: add AUC per class metric
             self.num_target_labels = {}
             self.num_predicted_labels = {}
             self.acc_per_class = {}
@@ -360,7 +357,8 @@ class EmotionClassifier:
 
                         self.test_on_validation()
 
-                        # TODO: remove below, just print validation summaries to tensorboard
+                        # TODO [p0]: remove below, but add relevant summaries to tensorboard
+                        # TODO: can you add np arrays to tensorboard?
                         # Grab all validation data.
                         valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
                         val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
@@ -487,7 +485,7 @@ def bias_variable(shape, name):
 
 
 def main(args):
-    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(args.learning_rate)}/{str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))}'
+    log_dir = f'{args.logs_base_dir}/{args.embedding_model}/{args.embedding_layer}/{str(args.learning_rate)}/{args.uncertainty_type}/{str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))}'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -545,7 +543,7 @@ def parse_arguments(argv):
     parser.add_argument('--output_every_nth', type=int,
                         help='Write to tensorboard every n batches of training.', default=1000)
     parser.add_argument('--max_nrof_epochs', type=int,
-                        help='Number of epochs to run.', default=100000)
+                        help='Number of epochs to run.', default=10)     # 3 is fine
     parser.add_argument('--batch_size', type=int,
                         help='Number of images to process in a batch.', default=90)
     parser.add_argument('--hidden_layer_size', type=list,
