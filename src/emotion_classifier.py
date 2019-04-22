@@ -15,8 +15,8 @@ import scipy
 
 
 class EmotionClassifier:
-    def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
-                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
+    def __init__(self, filename, model_name, embedding_model='CASIA_WebFace_Inception_ResNet_v1', embedding_layer='Mixed_7a',
+                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=0.0001, dropout_prob=1.0,
                  weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666,
                  uncertainty_type='none', n_aleatoric=None, n_epistemic=None):
         self.epsilon = 1e-20
@@ -186,7 +186,7 @@ class EmotionClassifier:
         with self.graph.as_default():
             self.tf_x = tf.placeholder(tf.float32, shape=(None, self.input_size), name="x")  # features
             self.tf_y = tf.placeholder(tf.float32, shape=(None, self.output_size), name="y")  # labels
-            self.tf_dropout_prob = tf.placeholder(tf.float32)  # Implements dropout
+            self.tf_dropout_prob = tf.placeholder(tf.float32, name="dropout_prob")  # Implements dropout
 
             self.initialize_network_weights()
 
@@ -217,8 +217,11 @@ class EmotionClassifier:
             elif self.uncertainty_type == 'aleatoric' or self.uncertainty_type == 'both':
                 # Compute the loss function
                 self.logits_mean_log_var = run_network(self.tf_x)
+                self.logits_mean_log_var = tf.identity(self.logits_mean_log_var, name="logits_mean_var_log")
                 self.logits_mean = self.logits_mean_log_var[:, :self.output_size]
+                self.logits_mean = tf.identity(self.logits_mean, name="logits_mean")
                 self.logits_var = tf.exp(self.logits_mean_log_var[:, self.output_size])
+                self.logits_var = tf.identity(self.logits_var, name="logits_var")
                 self.loss = tf.reduce_mean(self.bayesian_categorical_crossentropy(
                     T=self.n_aleatoric, num_classes=Constants.get_no_emotions(),
                     pred_mean_log_var=self.logits_mean_log_var, true=self.tf_y))
@@ -228,10 +231,18 @@ class EmotionClassifier:
 
             # Add weight decay regularization term to loss
             self.loss += self.weight_penalty * sum([tf.nn.l2_loss(w) for w in self.weights])
+            self.loss = tf.identity(self.loss, name="loss")
+
+            self.logits = tf.identity(self.logits, name="logits")
 
             self.class_probabilities = tf.nn.softmax(self.logits)
+            self.class_probabilities = tf.identity(self.class_probabilities, name="class_probabilities")
+
             self.predictions = tf.argmax(self.class_probabilities, axis=1)
+            self.predictions = tf.identity(self.predictions, name="predictions")
+
             self.target = tf.argmax(self.tf_y, axis=1)
+            self.target = tf.identity(self.target, name="target")
 
             self.kl = tf.reduce_sum(self._plus_eps(self.tf_y) * tf.log(
                 self._plus_eps(self.tf_y) / self._plus_eps(self.class_probabilities)))
@@ -241,8 +252,11 @@ class EmotionClassifier:
                     tf.ones_like(self.class_probabilities) - self._plus_eps(self.class_probabilities)))
 
             self.acc = tf.reduce_mean(tf.to_float(tf.equal(self.target, self.predictions)))
+            self.acc = tf.identity(self.acc, name="acc")
+
             self.mse = tf.reduce_mean(tf.square(tf.subtract(self.tf_y, self.class_probabilities)))
             self.rmse = tf.sqrt(self.mse)
+
 
             # TODO [p1]: add AUC per class metric
             self.num_target_labels = {}
@@ -316,7 +330,7 @@ class EmotionClassifier:
 
         with self.graph.as_default():
             # Used to save model checkpoints.
-            self.saver = tf.train.Saver()
+            self.saver = tf.train.Saver(max_to_keep=self.num_epochs)
 
             steps_per_epoch = int(self.data_loader.get_nrof_train_sampels()/self.batch_size)
             for num_epoch in range(self.num_epochs):
@@ -341,44 +355,29 @@ class EmotionClassifier:
                     # Update parameters in the direction of the gradient computed by
                     # the optimizer.
                     self.session.run([self.opt_step], feed_dict)
-                    # train_loss, grads, logits_mean_var, _ = self.session.run([self.loss, self.gradients, self.logits_mean_var, self.opt_step], feed_dict)
-                    # grads_nan = sum([sum(i) for i in [np.isnan(g.flatten()) for g in grads]])
-                    # logits_nan = sum(sum(np.isnan(logits_mean_var)))
-                    # print (f'train loss: {train_loss}')
-                    # print(f'gradients has nan? {grads_nan}')
-                    # print(f'logits has nan? {logits_nan}')
 
-                    # Evaluate model every nth step
-                    if global_step % self.output_every_nth == 0:
-                        # Grab another random batch of train data.
-                        # train_labels, train_embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size)
-                        # train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
-                        #                    self.tf_dropout_prob: 1.0}
+                self.test_on_validation()
 
-                        self.test_on_validation()
+                # Grab all validation data.
+                valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+                val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
+                                 self.tf_dropout_prob: self.eval_dropout_prob}
 
-                        # TODO [p0]: remove below, but add relevant summaries to tensorboard
-                        # TODO: can you add np arrays to tensorboard?
-                        # Grab all validation data.
-                        valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
-                        val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
-                                         self.tf_dropout_prob: self.eval_dropout_prob}
+                train_summaries, train_score, train_loss = self.session.run(
+                    [self.summaries, self.acc, self.loss], feed_dict)
+                valid_summaries, valid_score, valid_loss = self.session.run(
+                    [self.summaries, self.acc, self.loss], val_feed_dict)
 
-                        train_summaries, train_score, train_loss = self.session.run(
-                            [self.summaries, self.acc, self.loss], feed_dict)
-                        valid_summaries, valid_score, valid_loss = self.session.run(
-                            [self.summaries, self.acc, self.loss], val_feed_dict)
+                self.train_summary_writer.add_summary(train_summaries, global_step=num_epoch)
+                self.valid_summary_writer.add_summary(valid_summaries, global_step=num_epoch)
 
-                        self.train_summary_writer.add_summary(train_summaries, global_step=global_step)
-                        self.valid_summary_writer.add_summary(valid_summaries, global_step=global_step)
+                print(f"Epoch #: {num_epoch}, training step: {step}, global step: {global_step}")
+                print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
+                print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
 
-                        print(f"Epoch #: {num_epoch}, training step: {step}, global step: {global_step}")
-                        print(f"\tTraining {self.metric_name} {train_score}, Loss: {train_loss}")
-                        print(f"\tValidation {self.metric_name} {valid_score}, Loss: {valid_loss}")
-
-                        # Save a checkpoint of the model
-                        self.saver.save(self.session, self.checkpoint_dir + self.model_name + '.ckpt',
-                                        global_step=global_step)
+                # Save a checkpoint of the model
+                self.saver.save(self.session, f'{self.checkpoint_dir}/{self.model_name}_{num_epoch}.ckpt',
+                                global_step=num_epoch)
 
     def predict(self, x, get_probabilities=False):
         """Gets the network's predictions for some new data X
