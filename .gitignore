@@ -4,6 +4,9 @@ pretrained_models
 logs
 legacy_logs
 unc_logs
+epoch_logs
+epoch_logs_model
+unc_hparam_logs
 ./models
 *.DS_Store
 
