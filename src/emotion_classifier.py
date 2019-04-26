@@ -186,7 +186,7 @@ class EmotionClassifier:
         with self.graph.as_default():
             self.tf_x = tf.placeholder(tf.float32, shape=(None, self.input_size), name="x")  # features
             self.tf_y = tf.placeholder(tf.float32, shape=(None, self.output_size), name="y")  # labels
-            self.tf_dropout_prob = tf.placeholder(tf.float32)  # Implements dropout
+            self.tf_dropout_prob = tf.placeholder(tf.float32, name="dropout_prob")  # Implements dropout
 
             self.initialize_network_weights()
 
