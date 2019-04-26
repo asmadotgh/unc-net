@@ -15,8 +15,8 @@ import scipy
 
 
 class EmotionClassifier:
-    def __init__(self, filename, model_name, embedding_model='CASIA_WebFace_Inception_ResNet_v1', embedding_layer='Mixed_7a',
-                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=0.0001, dropout_prob=1.0,
+    def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
+                 layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
                  weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666,
                  uncertainty_type='none', n_aleatoric=None, n_epistemic=None):
         self.epsilon = 1e-20
@@ -186,7 +186,7 @@ class EmotionClassifier:
         with self.graph.as_default():
             self.tf_x = tf.placeholder(tf.float32, shape=(None, self.input_size), name="x")  # features
             self.tf_y = tf.placeholder(tf.float32, shape=(None, self.output_size), name="y")  # labels
-            self.tf_dropout_prob = tf.placeholder(tf.float32, name="dropout_prob")  # Implements dropout
+            self.tf_dropout_prob = tf.placeholder(tf.float32)  # Implements dropout
 
             self.initialize_network_weights()
 
@@ -256,7 +256,6 @@ class EmotionClassifier:
 
             self.mse = tf.reduce_mean(tf.square(tf.subtract(self.tf_y, self.class_probabilities)))
             self.rmse = tf.sqrt(self.mse)
-
 
             # TODO [p1]: add AUC per class metric
             self.num_target_labels = {}
