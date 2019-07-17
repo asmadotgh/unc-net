@@ -39,7 +39,7 @@ class DataLoader:
         # Saving numpy arrays for images and labels
         self.labels = np.zeros((self.nrof_samples, len(Constants.get_emotion_cols())))
         for idx in range(self.nrof_samples):
-            if (idx % 100 == 0):
+            if idx % 100 == 0:
                 print(f'\033[1A\033[KConverting row {idx} of dataframe to numpy array.')
             # Getting labels
             inp_labels = self.dataset.iloc[idx][Constants.get_emotion_cols()]
@@ -168,7 +168,6 @@ class DataLoader:
         else:
             embeddings = None
         return images, labels, embeddings
-
 
     def load_data_np(self, indices=None):
         if indices is None:
