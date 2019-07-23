@@ -37,7 +37,7 @@ class DataLoader:
         np.random.shuffle(self.shuffled_train_indices)
 
         # Saving numpy arrays for images and labels
-        targets = np.array(self.dataset['emotion'])
+        targets = np.array(self.dataset['emotion_corrected_label'])
         self.single_labels = np.eye(Constants.get_no_emotions())[targets]
         self.labels = np.zeros((self.nrof_samples, Constants.get_no_emotions()))
         for idx in range(self.nrof_samples):
