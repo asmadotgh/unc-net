@@ -342,9 +342,11 @@ class EmotionClassifier:
                     # DEBUG - does it overfit to all neutral input? Yes, passed
                     # labels = np.repeat(np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0]]), [self.batch_size], axis=0)
                     # DEBUG - does it overfit to a small training set? Yes, passed
-                    # labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=0)
+                    # labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=0,
+                    #                                                       single_label=self.single_label)
                     # DEBUG - What about a slightly larger dataset (almost 1/10 of data)? Yes, Pass
-                    # labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30)
+                    # labels, embeddings = self.data_loader.get_train_batch(batch_size=self.batch_size, idx=step % 30,
+                    #                                                       single_label=self.single_label)
 
                     feed_dict = {self.tf_x: embeddings,
                                  self.tf_y: labels,
@@ -356,13 +358,18 @@ class EmotionClassifier:
 
                 self.test_on_validation()
 
+                # Grab all train data.
+                train_labels, train_embeddings = self.data_loader.get_train_batch(single_label=self.single_label)
+                train_feed_dict = {self.tf_x: train_embeddings, self.tf_y: train_labels,
+                                   self.tf_dropout_prob: self.dropout_prob}
+
                 # Grab all validation data.
                 valid_labels, valid_embeddings = self.data_loader.get_valid_batch(single_label=self.single_label)
                 val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
                                  self.tf_dropout_prob: self.eval_dropout_prob}
 
                 train_summaries, train_score, train_loss = self.session.run(
-                    [self.summaries, self.acc, self.loss], feed_dict)
+                    [self.summaries, self.acc, self.loss], train_feed_dict)
                 valid_summaries, valid_score, valid_loss = self.session.run(
                     [self.summaries, self.acc, self.loss], val_feed_dict)
 
@@ -511,7 +518,8 @@ def main(args):
 # use this for debugging purposes
 # CUDA_VISIBLE_DEVICES=1 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --uncertainty_type='aleatoric' --batch_size=10
 
-# CUDA_VISIBLE_DEVICES=3 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --uncertainty_type='aleatoric' --batch_size=10 --single_label
+# CUDA_VISIBLE_DEVICES=3 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --batch_size=10 --single_label
+# CUDA_VISIBLE_DEVICES=2 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --batch_size=10
 
 
 def parse_arguments(argv):
