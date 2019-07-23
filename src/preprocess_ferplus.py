@@ -34,6 +34,7 @@ class FERPlus:
     def _preprocess(df):
         df = df.apply(FERPlus._calc_metrics, axis=1)
         df = df.dropna(subset=['img_name', 'entropy', 'disagreement_p'])
+        df['emotion_corrected_label'] = df['emotion_corrected_label'].astype(int)
         df = df[['emotion', 'pixels', 'dataset', 'img_name'] + Constants.get_label_cols() +
                 ['emotion_corrected_label', 'entropy', 'disagreement_p', 'n_annotations']]
         return df
