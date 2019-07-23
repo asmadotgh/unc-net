@@ -15,7 +15,7 @@ class Constants:
     def correct_emotion_label(inp):
         # 0=Angry, 1=Disgust, 2=Fear, 3=Happy, 4=Sad, 5=Surprise, 6=Neutral
         emotion_dict = {0: 4, 1: 5, 2: 6, 3: 1, 4: 3, 5: 2, 6: 0}
-        return emotion_dict[inp]
+        return int(emotion_dict[inp])
 
     @staticmethod
     def get_output_image_size():
