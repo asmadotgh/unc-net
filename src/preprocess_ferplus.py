@@ -9,13 +9,14 @@ from my_constants import Constants
 
 class FERPlus:
     def __init__(self, df, output_dir):
-        self.df = self._preprocess(df)
-        self.train = df[df['dataset'] == 'Training'].reset_index(drop=True)
-        self.valid = df[df['dataset'] == 'PrivateTest'].reset_index(drop=True)
-        self.test = df[df['dataset'] == 'PublicTest'].reset_index(drop=True)
+        self.df = FERPlus._preprocess(df)
+        self.train = self.df[self.df['dataset'] == 'Training'].reset_index(drop=True)
+        self.valid = self.df[self.df['dataset'] == 'PrivateTest'].reset_index(drop=True)
+        self.test = self.df[self.df['dataset'] == 'PublicTest'].reset_index(drop=True)
         self.output_dir = output_dir
 
-    def _calc_metrics(self, series):
+    @staticmethod
+    def _calc_metrics(series):
         n_annotations = sum(series[Constants.get_emotion_cols()])
         if n_annotations == 0:
             series['entropy'] = np.nan
@@ -25,14 +26,20 @@ class FERPlus:
         probs = list(series[Constants.get_emotion_cols()]*1.0/n_annotations)
         series['entropy'] = scipy.stats.entropy(probs)
         series['disagreement_p'] = 1.0 - sum([p*p for p in probs])  # 1 - \sum p^2
+        series['n_annotations'] = n_annotations
+        series['emotion_corrected_label'] = Constants.correct_emotion_label(series['emotion'])
         return series
 
-    def _preprocess(self, df):
-        df = df.apply(self._calc_metrics, axis=1)
+    @staticmethod
+    def _preprocess(df):
+        df = df.apply(FERPlus._calc_metrics, axis=1)
         df = df.dropna(subset=['img_name', 'entropy', 'disagreement_p'])
+        df = df[['emotion', 'pixels', 'dataset', 'img_name'] + Constants.get_label_cols() +
+                ['emotion_corrected_label', 'entropy', 'disagreement_p', 'n_annotations']]
         return df
 
-    def _save_df(self, df, output_dir):
+    @staticmethod
+    def _save_df(df, output_dir):
         df.to_csv(output_dir, index=False)
 
     def export_data(self):
