@@ -37,7 +37,9 @@ class DataLoader:
         np.random.shuffle(self.shuffled_train_indices)
 
         # Saving numpy arrays for images and labels
-        self.labels = np.zeros((self.nrof_samples, len(Constants.get_emotion_cols())))
+        targets = np.array(self.dataset['emotion'])
+        self.single_labels = np.eye(Constants.get_no_emotions())[targets]
+        self.labels = np.zeros((self.nrof_samples, Constants.get_no_emotions()))
         for idx in range(self.nrof_samples):
             if idx % 100 == 0:
                 print(f'\033[1A\033[KConverting row {idx} of dataframe to numpy array.')
@@ -169,7 +171,7 @@ class DataLoader:
             embeddings = None
         return images, labels, embeddings
 
-    def load_data_np(self, indices=None):
+    def load_data_np(self, indices=None, single_label=False):
         if indices is None:
             indices = range(self.nrof_samples)
         # Getting previously processed embeddings
@@ -177,7 +179,10 @@ class DataLoader:
             embeddings = self.embeddings[indices]
         else:
             embeddings = None
-        return self.labels[indices, :], embeddings
+        if single_label:
+            return self.single_labels[indices, :], embeddings
+        else:
+            return self.labels[indices, :], embeddings
 
     def load_model(self, model, input_map=None):
         # Check if the model is a model directory (containing a metagraph and a checkpoint file)
@@ -199,35 +204,35 @@ class DataLoader:
             saver = tf.train.Saver()
             saver.restore(tf.get_default_session(), os.path.join(model_exp, ckpt_file))
 
-    def get_train_batch(self, batch_size=None, idx=None):
+    def get_train_batch(self, batch_size=None, idx=None, single_label=False):
         if idx is None:
             if batch_size is None:
                 indices = self.train.index
             else:
                 indices = np.random.choice(self.train.index, size=batch_size)
-            labels, embeddings = self.load_data_np(indices=indices)
+            labels, embeddings = self.load_data_np(indices=indices, single_label=single_label)
         else:
             if ((idx + 1) * batch_size) > len(self.train):
                 print('batch number exceeds train size.')
                 return None, None
             indices = self.shuffled_train_indices[idx * batch_size:(idx + 1) * batch_size]
-            labels, embeddings = self.load_data_np(indices=indices)
+            labels, embeddings = self.load_data_np(indices=indices, single_label=single_label)
         return labels, embeddings
 
-    def get_valid_batch(self, batch_size=None):
+    def get_valid_batch(self, batch_size=None, single_label=False):
         if batch_size is None:
             indices = self.valid.index
         else:
             indices = np.random.choice(self.valid.index, size=batch_size)
-        labels, embeddings = self.load_data_np(indices=indices)
+        labels, embeddings = self.load_data_np(indices=indices, single_label=single_label)
         return labels, embeddings
 
-    def get_test_batch(self, batch_size=None):
+    def get_test_batch(self, batch_size=None, single_label=False):
         if batch_size is None:
             indices = self.test.index
         else:
             indices = np.random.choice(self.test.index, size=batch_size)
-        labels, embeddings = self.load_data_np(indices=indices)
+        labels, embeddings = self.load_data_np(indices=indices, single_label=single_label)
         return labels, embeddings
 
 

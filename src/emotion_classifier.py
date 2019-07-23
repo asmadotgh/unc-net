@@ -18,7 +18,7 @@ class EmotionClassifier:
     def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
                  layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
                  weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666,
-                 uncertainty_type='none', n_aleatoric=None, n_epistemic=None):
+                 uncertainty_type='none', n_aleatoric=None, n_epistemic=None, single_label=False):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
         and building the graph.
@@ -42,6 +42,9 @@ class EmotionClassifier:
             checkpoint_dir: the directly where the model will save checkpoints,
                 saved files containing trained network weights.
             '''
+
+        # Problem definition parameters
+        self.single_label = single_label
 
         # Logistics
         self.checkpoint_dir = checkpoint_dir
@@ -177,7 +180,6 @@ class EmotionClassifier:
 
         return new_loss
 
-
     def build_graph(self):
         """Constructs the tensorflow computation graph containing all variables
         that will be trained."""
@@ -205,8 +207,6 @@ class EmotionClassifier:
                             # Apply dropout
                             hidden = tf.nn.dropout(hidden, self.tf_dropout_prob)
                 return hidden
-
-
 
             # Apply a softmax function to get probabilities, train this dist against targets with
             # cross entropy loss.
@@ -298,7 +298,6 @@ class EmotionClassifier:
             self.opt_step = self.tf_optimizer.apply_gradients(zip(self.gradients, self.params),
                                                               self.global_step)
 
-
             [tf.summary.histogram("%s-grad" % g[1].name, g[0]) for g in self.gradients]
 
             tf.summary.scalar('loss', self.loss)
@@ -358,7 +357,7 @@ class EmotionClassifier:
                 self.test_on_validation()
 
                 # Grab all validation data.
-                valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+                valid_labels, valid_embeddings = self.data_loader.get_valid_batch(single_label=self.single_label)
                 val_feed_dict = {self.tf_x: valid_embeddings, self.tf_y: valid_labels,
                                  self.tf_dropout_prob: self.eval_dropout_prob}
 
@@ -405,7 +404,7 @@ class EmotionClassifier:
 
     def test_on_validation(self):
         """Returns performance on the model's validation set."""
-        valid_labels, valid_embeddings = self.data_loader.get_valid_batch()
+        valid_labels, valid_embeddings = self.data_loader.get_valid_batch(single_label=self.single_label)
         loss, score, aleatoric_u, epistemic_u = self.get_performance_on_data(valid_embeddings,
                                              valid_labels)
         print(f"Valid data loss: {loss}")
@@ -417,7 +416,7 @@ class EmotionClassifier:
 
     def test_on_test(self):
         """Returns performance on the model's test set."""
-        test_labels, test_embeddings = self.data_loader.get_test_batch()
+        test_labels, test_embeddings = self.data_loader.get_test_batch(single_label=self.single_label)
         loss, score, aleatoric_u, epistemic_u = self.get_performance_on_data(test_embeddings,
                                              test_labels)
         print(f"Test data loss: {loss}")
@@ -503,7 +502,8 @@ def main(args):
                                            dropout_prob=args.keep_probability, learning_rate=args.learning_rate,
                                            weight_penalty=args.weight_decay, seed=args.seed,
                                            uncertainty_type=args.uncertainty_type, n_aleatoric=args.n_aleatoric,
-                                           n_epistemic=args.n_epistemic)
+                                           n_epistemic=args.n_epistemic,
+                                           single_label=args.single_label)
     emotion_classifier.train(output_every_nth=args.output_every_nth)
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
@@ -511,9 +511,14 @@ def main(args):
 # use this for debugging purposes
 # CUDA_VISIBLE_DEVICES=1 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --uncertainty_type='aleatoric' --batch_size=10
 
+# CUDA_VISIBLE_DEVICES=3 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --uncertainty_type='aleatoric' --batch_size=10 --single_label
+
 
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
+
+    parser.add_argument('--single_label', action='store_true',
+                        help='Whether to train on FER (single label) or FER+ (multi-label) dataset.')
 
     parser.add_argument('--file_path', type=str,
                         default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
