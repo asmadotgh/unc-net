@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 import scipy
-from scipy import stats
 import argparse
 import sys
 from my_constants import Constants

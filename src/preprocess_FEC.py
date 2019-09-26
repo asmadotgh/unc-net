@@ -1,13 +1,8 @@
 import numpy as np
 import os
-import tensorflow as tf
-from tensorflow.python.platform import gfile
-import re
 import pandas as pd
-from PIL import Image
 import argparse
 from my_constants import Constants
-import pickle
 import urllib.request
 from PIL import Image
 
