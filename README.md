@@ -12,6 +12,7 @@ If you use uncertainty quantification aspects of this code, please reference the
     year={2019},
     eprint={1909.09285},
     archivePrefix={arXiv},
-    primaryClass={cs.LG}
+    primaryClass={cs.LG},
+    note = {2019 ICCV Workshop on Interpreting and Explaining Visual Artificial Intelligence Models}
 }
 ```
