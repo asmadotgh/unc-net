@@ -3,7 +3,7 @@ This code is built upon an a [TensorFlow implementation](https://github.com/davi
 For more information, see [here](https://arxiv.org/abs/1909.09285).
 
 ## Reference
-If you use this code, please reference the following paper:
+If you use uncertainty quantification aspects of this code, please reference the following paper:
 
 ```
 @article{ghandeharioun2019characterizing,
