@@ -64,13 +64,13 @@ def parse_arguments(argv):
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--fer_dir', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FER+/FER/fer2013/fer2013.csv',
+                        default=None,
                         help='Path to FER data.')
     parser.add_argument('--fer_plus_dir', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FER+/FERPlus/fer2013new.csv',
+                        default=None,
                         help='Path to FER+ data.')
     parser.add_argument('--output_dir', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FER+',
+                        default=None,
                         help='Path to the directory to save train/valid/test subsets.')
     parser.add_argument('--image_size', type=int,
                         help='Image size (height, width) in pixels.', default=68)

@@ -94,18 +94,10 @@ class ImageDownloader:
                 processed_filename = self.images_dir + f'processed/{idx}_{i}.jpg'
                 self.download_image(url, bounding_box, raw_filename, processed_filename)
 
-# total #test: 51,060
-# total #train: 449,143
-
-
-# Example use cases:
-# CUDA_VISIBLE_DEVICES=3 python preprocess_FEC.py --file_path='/mas/u/asma_gh/uncnet/datasets/FEC_dataset/faceexp-comparison-data-train-public.csv'
-# CUDA_VISIBLE_DEVICES=3 python preprocess_FEC.py --file_path='/mas/u/asma_gh/uncnet/datasets/FEC_dataset/faceexp-comparison-data-test-public.csv'
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--file_path', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FEC_dataset/faceexp-comparison-data-train-public.csv',
+                        default=None,
                         help='Path to the file containing image directories and labels.')
     args = parser.parse_args()
     image_downloader = ImageDownloader(args.file_path)

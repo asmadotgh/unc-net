@@ -135,7 +135,6 @@ class DataLoader:
             os.makedirs(dataset_dir)
         img.save(os.path.join(dataset_dir, img_name))
 
-    # TODO this part is NON-OPTIMAL. MOVE THIS TO INIT AND ONLY USE INDICES
     def load_data(self, indices=None, do_random_crop=False, do_random_flip=False, save_images=False):
         if indices is None:
             indices = range(self.nrof_samples)
@@ -239,7 +238,7 @@ class DataLoader:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--file_path', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
+                        default=None,
                         help='Path to the file containing faces/labels.')
     args = parser.parse_args()
     data_loader = DataLoader(args.file_path, in_image_size=48, out_image_size=160, import_embedding=False)

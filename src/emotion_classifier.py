@@ -17,7 +17,7 @@ import scipy
 class EmotionClassifier:
     def __init__(self, filename, model_name, embedding_model='VGGFace2_Inception_ResNet_v1', embedding_layer='Mixed_5a',
                  layer_sizes=[128, 128], num_epochs=500, batch_size=90, learning_rate=.001, dropout_prob=1.0,
-                 weight_penalty=0.0, clip_gradients=True, checkpoint_dir='/mas/u/asma_gh/uncnet/logs/', seed=666,
+                 weight_penalty=0.0, clip_gradients=True, checkpoint_dir=None, seed=666,
                  uncertainty_type='none', n_aleatoric=None, n_epistemic=None, single_label=False):
         self.epsilon = 1e-20
         '''Initialize the class by loading the required datasets
@@ -257,7 +257,6 @@ class EmotionClassifier:
             self.mse = tf.reduce_mean(tf.square(tf.subtract(self.tf_y, self.class_probabilities)))
             self.rmse = tf.sqrt(self.mse)
 
-            # TODO [p1]: add AUC per class metric
             self.num_target_labels = {}
             self.num_predicted_labels = {}
             self.acc_per_class = {}
@@ -278,7 +277,6 @@ class EmotionClassifier:
                 self.recall_per_class[idx] = tf.reduce_sum(tf.to_float(tf.equal(class_target, class_prediction)))/tf.reduce_sum(class_target)
                 self.f1_per_class[idx] = 2*self.precision_per_class[idx]*self.recall_per_class[idx]/(
                         self.precision_per_class[idx]+self.recall_per_class[idx])
-                # self.AUC_per_class[idx] = tf.constant(np.nan, shape=[1])
 
                 tf.summary.scalar(f'metrics_{emotion_label}/num_target_labels', self.num_target_labels[idx])
                 tf.summary.scalar(f'metrics_{emotion_label}/num_predicted_labels', self.num_predicted_labels[idx])
@@ -286,7 +284,6 @@ class EmotionClassifier:
                 tf.summary.scalar(f'metrics_{emotion_label}/precision', self.precision_per_class[idx])
                 tf.summary.scalar(f'metrics_{emotion_label}/recall', self.recall_per_class[idx])
                 tf.summary.scalar(f'metrics_{emotion_label}/F1', self.f1_per_class[idx])
-                # tf.summary.scalar(f'metrics_{emotion_label}/AUC', self.AUC_per_class[idx])
 
             # Set up backpropagation computation
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -515,13 +512,6 @@ def main(args):
     emotion_classifier.test_on_validation()
     emotion_classifier.test_on_test()
 
-# use this for debugging purposes
-# CUDA_VISIBLE_DEVICES=1 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --uncertainty_type='aleatoric' --batch_size=10
-
-# CUDA_VISIBLE_DEVICES=3 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --batch_size=10 --single_label
-# CUDA_VISIBLE_DEVICES=2 python emotion_classifier.py --file_path='/mas/u/asma_gh/uncnet/datasets/FER+/debug_all.csv' --logs_base_dir='/mas/u/asma_gh/uncnet/debug_logs/' --batch_size=10
-
-
 def parse_arguments(argv):
     parser = argparse.ArgumentParser()
 
@@ -529,7 +519,7 @@ def parse_arguments(argv):
                         help='Whether to train on FER (single label) or FER+ (multi-label) dataset.')
 
     parser.add_argument('--file_path', type=str,
-                        default='/mas/u/asma_gh/uncnet/datasets/FER+/all.csv',
+                        default=None,
                         help='Path to the data file containing aligned faces/labels.')
     parser.add_argument('--uncertainty_type', type=str,
                         default='none',
@@ -549,7 +539,7 @@ def parse_arguments(argv):
                         help='Model name.',
                         default='FC')
     parser.add_argument('--logs_base_dir', type=str,
-                        default='/mas/u/asma_gh/uncnet/logs/',
+                        default=None,
                         help='Directory where to write event logs.')
     parser.add_argument('--output_every_nth', type=int,
                         help='Write to tensorboard every n batches of training.', default=1000)
@@ -570,7 +560,6 @@ def parse_arguments(argv):
                         help='Random seed.', default=666)
 
 
-    # TODO [p2] need these?
     parser.add_argument('--pretrained_model', type=str,
                         help='Load a pretrained model before training starts.')
     parser.add_argument('--image_size', type=int,
